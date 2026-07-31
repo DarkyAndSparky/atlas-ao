@@ -1,0 +1,61 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: atlas-allods:latest
+    restart: unless-stopped
+    environment:
+      PORT: 4173
+      # /app/data и не /app — базу и uploads держим отдельно от кода в именованных
+      # томах, чтобы `docker compose up --build` (пересборка образа) их не задевал.
+      ATLAS_DB_PATH: /app/data/atlas.db
+      ATLAS_UPLOAD_DIR: /app/uploads
+      ATLAS_BACKUPS_DIR: /app/backups
+      # обязательно задайте свой секрет в .env — без него сервер сам сгенерирует
+      # файл server/.session-secret внутри контейнера, и он потеряется при
+      # пересоздании контейнера (все залогиненные сессии слетят).
+      SESSION_SECRET: ${SESSION_SECRET:?Задайте SESSION_SECRET в .env — см. .env.example}
+      # сервер стоит за Caddy (см. ниже) — доверяем X-Forwarded-* и включаем secure-куки
+      ATLAS_TRUST_PROXY: "1"
+      ATLAS_HTTPS: "1"
+    volumes:
+      - atlas-db:/app/data
+      - atlas-uploads:/app/uploads
+      - atlas-backups:/app/backups
+    expose:
+      - "4173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/api/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # домен и e-mail для автоматического выпуска Let's Encrypt-сертификата.
+      # Нужен настоящий домен с DNS, указывающим на этот сервер, и открытые
+      # наружу порты 80/443. Для локальной проверки без домена и без Caddy —
+      # используйте docker-compose.local.yml вместо этого файла (см. README).
+      ATLAS_DOMAIN: ${ATLAS_DOMAIN:?Задайте ATLAS_DOMAIN в .env, напр. atlas.example.com}
+      ATLAS_ACME_EMAIL: ${ATLAS_ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  atlas-db:
+  atlas-uploads:
+  atlas-backups:
+  caddy-data:
+  caddy-config:

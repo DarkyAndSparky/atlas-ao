@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Документация — Атлас Аллодов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+@font-face{
+  font-family:'Allods West';
+  src:url('../public/assets/fonts/allods-west.woff2') format('woff2'),
+      url('../public/assets/fonts/allods-west.ttf') format('truetype');
+  font-weight:normal; font-style:normal; font-display:swap;
+}
+:root{
+  --void-0:#0b0e1a; --void-1:#12172a; --void-2:#1a2038;
+  --parchment:#e8dcc0; --parchment-dim:#9a917a;
+  --gold:#c9a24b; --gold-bright:#e8c874;
+  --astral:#6fd3d9; --imperial:#b3543f; --ligue:#4f7fb3; --elf:#7fae5c;
+  --line:rgba(201,162,75,0.22);
+  --display:'Allods West','Cinzel','Georgia',serif;
+  --body:'EB Garamond','Palatino Linotype',Georgia,serif;
+  --ui:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --void-0:#f3ecd8; --void-1:#e9dfc0; --void-2:#d9caa0;
+    --parchment:#2c2410; --parchment-dim:#6e5d3a;
+    --gold:#96701f; --gold-bright:#7a5714;
+    --line:rgba(150,112,31,0.28);
+  }
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;background:var(--void-0);color:var(--parchment);font-family:var(--body);
+  background-image:
+    radial-gradient(ellipse 900px 500px at 15% 0%, rgba(111,211,217,0.06), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 85% 30%, rgba(201,162,75,0.05), transparent 60%);
+}
+a{color:var(--gold-bright);}
+code, pre{font-family:var(--mono);}
+
+/* ---------- layout ---------- */
+.wrap{display:grid;grid-template-columns:260px 1fr;min-height:100vh;max-width:1240px;margin:0 auto;}
+.toc{
+  position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+  padding:34px 20px 40px 28px;border-right:1px solid var(--line);
+}
+.toc-brand{font-family:var(--display);font-size:19px;color:var(--gold-bright);letter-spacing:1px;margin-bottom:2px;}
+.toc-version{font-family:var(--ui);font-size:10px;color:var(--parchment-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:28px;}
+.toc nav{display:flex;flex-direction:column;gap:2px;}
+.toc a{
+  font-family:var(--ui);font-size:12.5px;color:var(--parchment-dim);text-decoration:none;
+  padding:6px 10px;border-radius:3px;border-left:2px solid transparent;
+}
+.toc a:hover{color:var(--gold-bright);background:rgba(201,162,75,0.06);}
+.toc .grp{font-family:var(--ui);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--parchment-dim);opacity:0.55;margin:16px 0 4px 10px;}
+.toc .grp:first-of-type{margin-top:0;}
+
+main{padding:56px 56px 100px;min-width:0;}
+.hero h1{font-family:var(--display);font-size:42px;margin:0 0 10px;letter-spacing:0.5px;}
+.hero p{font-family:var(--ui);font-size:14.5px;color:var(--parchment-dim);max-width:62ch;line-height:1.7;margin:0 0 8px;}
+.hero{margin-bottom:56px;padding-bottom:36px;border-bottom:1px solid var(--line);}
+.badge-row{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;}
+.badge{
+  font-family:var(--ui);font-size:11px;letter-spacing:0.5px;text-transform:uppercase;
+  border:1px solid var(--line);color:var(--parchment-dim);padding:5px 12px;border-radius:20px;
+}
+
+section{margin-bottom:58px;scroll-margin-top:24px;}
+section h2{
+  font-family:var(--display);font-size:24px;color:var(--gold-bright);margin:0 0 6px;
+  padding-bottom:12px;border-bottom:1px solid var(--line);
+}
+section h2 small{font-family:var(--ui);font-size:11px;color:var(--parchment-dim);text-transform:none;letter-spacing:0;display:block;margin-top:6px;font-weight:400;}
+h3{font-family:var(--display);font-size:16.5px;color:var(--parchment);margin:28px 0 10px;letter-spacing:0.3px;}
+p{font-size:16px;line-height:1.75;margin:0 0 14px;}
+ul, ol{font-size:15.5px;line-height:1.8;padding-left:22px;margin:0 0 14px;}
+li{margin-bottom:4px;}
+strong{color:var(--gold-bright);font-weight:600;}
+
+pre{
+  background:var(--void-1);border:1px solid var(--line);border-radius:4px;
+  padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.6;margin:0 0 16px;color:var(--parchment);
+}
+code{background:var(--void-1);padding:1px 6px;border-radius:3px;font-size:0.85em;color:var(--gold-bright);}
+pre code{background:none;padding:0;color:inherit;}
+
+table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14.5px;}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);}
+th{font-family:var(--ui);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--parchment-dim);}
+
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:20px 0;}
+.card{border:1px solid var(--line);border-radius:5px;padding:18px 18px 16px;background:var(--void-1);}
+.card h4{font-family:var(--display);font-size:15px;margin:0 0 8px;color:var(--parchment);}
+.card p{font-size:13.5px;color:var(--parchment-dim);margin:0;line-height:1.6;}
+
+.callout{
+  border-left:3px solid var(--gold);background:rgba(201,162,75,0.06);
+  padding:14px 18px;border-radius:0 4px 4px 0;margin:0 0 18px;font-size:14.5px;
+}
+.callout.warn{border-left-color:var(--imperial);background:rgba(179,84,63,0.08);}
+.callout strong{display:block;font-family:var(--ui);font-size:11px;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;color:inherit;}
+
+.kbd{
+  font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);border-bottom-width:2px;
+  border-radius:4px;padding:2px 7px;background:var(--void-2);color:var(--parchment);
+}
+
+.foot{
+  margin-top:70px;padding-top:24px;border-top:1px solid var(--line);
+  font-family:var(--ui);font-size:11.5px;color:var(--parchment-dim);line-height:1.7;
+}
+
+@media (max-width:900px){
+  .wrap{grid-template-columns:1fr;}
+  .toc{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line);padding:24px 20px;}
+  main{padding:36px 22px 70px;}
+  .hero h1{font-size:32px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <aside class="toc">
+    <div class="toc-brand">Атлас Аллодов</div>
+    <div class="toc-version">Документация · v26w31-06</div>
+    <nav>
+      <div class="grp">Начало</div>
+      <a href="#about">Что это такое</a>
+      <a href="#quickstart">Быстрый старт</a>
+      <a href="#requirements">Системные требования</a>
+
+      <div class="grp">Использование</div>
+      <a href="#map">Глобальная карта</a>
+      <a href="#wiki">Атлас островов</a>
+      <a href="#projects">Проекты</a>
+      <a href="#island-page">Страница острова</a>
+
+      <div class="grp">Редактор</div>
+      <a href="#editor-login">Вход и права</a>
+      <a href="#editor-editing">Редактирование текста</a>
+      <a href="#editor-gallery">Галерея и подписи</a>
+      <a href="#editor-locations">Локации и мини-карта</a>
+      <a href="#editor-map">Расстановка на карте</a>
+      <a href="#editor-icons">Иконки островов</a>
+
+      <div class="grp">Обслуживание</div>
+      <a href="#backup">Бэкап и восстановление</a>
+      <a href="#import-export">Импорт / экспорт</a>
+      <a href="#security">Безопасность</a>
+      <a href="#docker">Docker и HTTPS</a>
+      <a href="#cli">Команды CLI</a>
+
+      <div class="grp">Прочее</div>
+      <a href="#architecture">Устройство проекта</a>
+      <a href="#legal">Правовая информация</a>
+    </nav>
+  </aside>
+
+  <main>
+
+    <div class="hero">
+      <h1>Документация</h1>
+      <p>Атлас Аллодов — самостоятельный сайт-энциклопедия аллодов (островов) вселенной
+      Allods Online: глобальная карта, вики-каталог, страницы островов с историей и
+      галереей, встроенный редактор для наполнения. Работает локально на вашем
+      компьютере, без внешних сервисов.</p>
+      <div class="badge-row">
+        <span class="badge">Версия v26w31-06</span>
+        <span class="badge">Node.js 22.5+</span>
+        <span class="badge">Без сети — всё локально</span>
+      </div>
+    </div>
+
+    <section id="about">
+      <h2>Что это такое</h2>
+      <p>Атлас — это одновременно и <strong>карта</strong>, и <strong>вики-справочник</strong>
+      по островам-аллодам. Глобальная карта — визуальная надстройка поверх текстового
+      каталога «Атлас островов»: оба показывают одни и те же данные и ссылаются на одни
+      и те же страницы островов, просто по-разному их организуют.</p>
+      <p>Данные хранятся в локальной базе SQLite на вашем компьютере. Наполнять и
+      редактировать их можно прямо на сайте — отдельный установочный редактор
+      или консоль не требуются.</p>
+    </section>
+
+    <section id="quickstart">
+      <h2>Быстрый старт</h2>
+      <h3>Через скрипты (рекомендуется)</h3>
+      <p><strong>Windows:</strong> дважды кликните <code>install.bat</code> один раз,
+      затем <code>start.bat</code> каждый раз, когда хотите открыть сайт.</p>
+      <p><strong>Linux / macOS:</strong></p>
+      <pre><code>chmod +x install.sh start.sh   # один раз
+./install.sh
+./start.sh</code></pre>
+      <p>Браузер откроется автоматически на <code>http://localhost:4173</code>.</p>
+
+      <h3>Вручную</h3>
+      <pre><code>cd server
+npm install
+node server.js</code></pre>
+    </section>
+
+    <section id="requirements">
+      <h2>Системные требования</h2>
+      <ul>
+        <li><strong>Node.js 22.5 или новее</strong> — сайт использует встроенный
+        <code>node:sqlite</code>, поэтому отдельная СУБД или компиляция нативных
+        модулей не нужны.</li>
+        <li>Любой современный браузер (Chrome, Firefox, Safari, Edge).</li>
+        <li>Сеть не требуется — сайт полностью локальный, обращений во внешний
+        интернет во время работы нет (кроме шрифтов, если вы их не закешировали).</li>
+      </ul>
+      <div class="callout warn">
+        <strong>Если Node.js старой версии</strong>
+        Скрипты <code>install.sh</code>/<code>install.bat</code> сами проверяют версию
+        и подскажут, что делать, если она младше 22.5.
+      </div>
+    </section>
+
+    <section id="map">
+      <h2>Глобальная карта</h2>
+      <p>Открывается по умолчанию. Управление:</p>
+      <table>
+        <tr><th>Действие</th><th>Мышь</th><th>Тач-экран</th></tr>
+        <tr><td>Панорама</td><td>зажать и тащить</td><td>один палец</td></tr>
+        <tr><td>Зум</td><td>колесо мыши / кнопки <span class="kbd">+</span> <span class="kbd">−</span></td><td>сведение/разведение двух пальцев</td></tr>
+        <tr><td>Открыть остров</td><td>клик по метке</td><td>тап по метке</td></tr>
+      </table>
+      <p>Сверху — поиск по названию, фильтры по категории и фракции, переключатель
+      проектов и переключатель «🗺️ Карта / 📖 Атлас островов».</p>
+    </section>
+
+    <section id="wiki">
+      <h2>Атлас островов</h2>
+      <p>Текстовый вики-каталог всех островов текущего проекта — открывается кнопкой
+      «📖 Атлас островов» в шапке. Список автоматически группируется:</p>
+      <ol>
+        <li>по фракции — Империя / Лига / Эльфийские / Нейтральные / Другие;</li>
+        <li>внутри каждой фракции — по размеру острова, от архипелагов до малых аллодов.</li>
+      </ol>
+      <p>Клик по названию острова открывает его страницу — ту же самую, что открывается
+      с глобальной карты.</p>
+    </section>
+
+    <section id="projects">
+      <h2>Проекты</h2>
+      <p>Атлас может содержать острова из нескольких игр/продуктов одновременно.
+      Переключатель с логотипами в шапке фильтрует карту, вики-каталог и все фильтры
+      только по выбранному проекту:</p>
+      <div class="card-grid">
+        <div class="card"><h4>Аллоды Онлайн</h4><p>Проект по умолчанию — все изначально загруженные острова относятся сюда.</p></div>
+        <div class="card"><h4>Пираты Штурм Небес</h4><p>Отдельный раздел, наполняется независимо.</p></div>
+        <div class="card"><h4>Allods Adventure</h4><p>Отдельный раздел, наполняется независимо.</p></div>
+        <div class="card"><h4>Классические игры</h4><p>Отдельный раздел, наполняется независимо.</p></div>
+      </div>
+      <p>Переназначить остров в другой проект можно в редакторе на странице острова —
+      блок «Проект» в сайдбаре.</p>
+    </section>
+
+    <section id="island-page">
+      <h2>Страница острова</h2>
+      <p>Открывается кликом по метке на карте или ссылке в вики-каталоге. Содержит:</p>
+      <ul>
+        <li><strong>Описание и историю</strong> — свободный текст;</li>
+        <li><strong>Галерею</strong> с подписями к фото — клик по фото открывает
+        полноэкранный просмотр (лайтбокс) со стрелками и клавиатурой;</li>
+        <li><strong>Локации</strong> — инлайн-блоки прямо на странице острова, у каждой
+        своё описание и своя галерея;</li>
+        <li><strong>Мини-карту локаций</strong> — если у острова есть карта-подложка
+        (поле «есть» в сведениях), локации можно расставить по ней визуально;</li>
+        <li><strong>Похожие острова</strong> — того же архипелага или категории;</li>
+        <li>Сведения (владелец, архипелаг, дополнение, сюжет) — пустые поля просто
+        скрываются, а не показываются прочерком.</li>
+      </ul>
+    </section>
+
+    <section id="editor-login">
+      <h2>Вход и права <small>Редактор</small></h2>
+      <p>Без входа сайт полностью доступен только для чтения — ничего нельзя
+      кликнуть на редактирование. Чтобы наполнять данные:</p>
+      <ol>
+        <li>Нажмите <strong>«Войти»</strong> в шапке.</li>
+        <li>При самом первом входе на этом сервере (аккаунтов ещё нет вообще)
+        вас попросят придумать имя пользователя и пароль — это станет первым
+        редактором, хэш пароля сохранится в базе.</li>
+        <li>При следующих входах — вводите своё имя пользователя и пароль.</li>
+        <li>Нажмите <strong>«Редактор»</strong>, чтобы включить режим правки.</li>
+      </ol>
+      <p>Аккаунты — многопользовательские: любой уже вошедший редактор может
+      пригласить ещё редакторов или удалить чужой аккаунт через
+      <strong>«⚙ Настройки» → «👤 Редакторы»</strong>. Все редакторы
+      равноправны (отдельной роли «администратор» нет); последний оставшийся
+      аккаунт через сайт удалить нельзя — иначе сайт остался бы совсем без
+      входа.</p>
+      <div class="callout">
+        <strong>Забыли все пароли, или нужно удалить чужой аккаунт без доступа к сайту?</strong>
+        Остановите сервер и выполните <code>npm run reset-password</code> в папке
+        <code>server/</code> — команда покажет список аккаунтов и даст удалить
+        конкретный (по имени) либо все сразу. При полном сбросе — при
+        следующем входе на сайте будет предложено создать первый аккаунт
+        заново, данные островов при этом не пострадают.
+      </div>
+    </section>
+
+    <section id="editor-editing">
+      <h2>Редактирование текста</h2>
+      <p>В режиме редактора кликните по названию, описанию или истории острова —
+      текст становится редактируемым прямо на странице. Уход с поля (клик в
+      другое место) сохраняет правку автоматически.</p>
+      <p>После сохранения внизу экрана на несколько секунд появляется уведомление
+      с кнопкой <strong>«Отменить»</strong> — она откатывает именно это изменение,
+      и на странице, и на сервере.</p>
+    </section>
+
+    <section id="editor-gallery">
+      <h2>Галерея и подписи</h2>
+      <p>Кнопка «+» в галерее острова или локации предлагает выбор:</p>
+      <ul>
+        <li><strong>Файл с компьютера</strong> — загружается на сервер; крупные фото
+        автоматически уменьшаются и сжимаются, чтобы не раздувать диск;</li>
+        <li><strong>Ссылка (URL)</strong> — просто указывается адрес изображения.</li>
+      </ul>
+      <p>Под каждым фото в режиме редактора можно кликнуть и вписать подпись —
+      она видна и в галерее, и в полноэкранном просмотре.</p>
+    </section>
+
+    <section id="editor-locations">
+      <h2>Локации и мини-карта</h2>
+      <p>Кнопка «+ Добавить локацию» создаёт новый блок прямо на странице острова.
+      Блоки можно переставлять местами — зажмите ручку <span class="kbd">⠿</span>
+      слева от названия локации и перетащите (работает и мышью, и пальцем).</p>
+      <p>Если у острова включено «Карта локации» и загружена картинка-подложка,
+      ниже появляется мини-карта: локации из списка неразмещённых можно перетащить
+      прямо на неё, а уже размещённые — двигать, чтобы уточнить позицию.</p>
+    </section>
+
+    <section id="editor-map">
+      <h2>Расстановка островов на глобальной карте</h2>
+      <p>В режиме редактора слева появляется панель «Неразмещённые острова».
+      Перетащите остров из списка на нужное место на карте — сработает и мышью,
+      и пальцем на тач-экране. Уже размещённую метку можно взять и переместить
+      точно так же.</p>
+      <h3>Новый остров</h3>
+      <p>Кнопка <strong>«+ Новый остров»</strong> вверху той же панели создаёт
+      пустую карточку острова (только с названием) и сразу открывает её страницу —
+      дальше остров заполняется как обычно и появляется в списке неразмещённых,
+      пока его не перетащат на карту.</p>
+      <h3>Удаление острова</h3>
+      <p>На странице острова в режиме редактора справа вверху — кнопка
+      <strong>«✕ Удалить остров»</strong>. Она безвозвратно удаляет остров целиком,
+      вместе со всеми его локациями и галереей (включая файлы в <code>uploads/</code>).
+      Действие требует подтверждения и не имеет отмены — если нужна подстраховка,
+      сначала сделайте экспорт или бэкап (см. раздел «Бэкап и восстановление»).</p>
+    </section>
+
+    <section id="editor-icons">
+      <h2>Иконки островов</h2>
+      <p>По умолчанию каждый остров на карте отмечен шаблонной иконкой-«блобом»:
+      форма зависит от размера острова, цвет — от климата. В сайдбаре страницы
+      острова (блок «Иконка на карте») можно в любой момент заменить заготовку
+      на свою — файлом или ссылкой — и вернуть обратно при необходимости.</p>
+    </section>
+
+    <section id="backup">
+      <h2>Бэкап и восстановление</h2>
+      <p>Меню <strong>«Данные ▾»</strong> в шапке (видно после входа):</p>
+      <table>
+        <tr><th>Пункт меню</th><th>Что делает</th></tr>
+        <tr><td>Экспорт (JSON)</td><td>Скачивает содержимое всех таблиц одним файлом — быстрый просмотровый бэкап.</td></tr>
+        <tr><td>Импорт (JSON)</td><td>Заменяет содержимое базы данными из выбранного файла.</td></tr>
+        <tr><td>Скачать базу целиком (.db)</td><td>Настоящий файл SQLite — самый надёжный способ перенести атлас на другой компьютер.</td></tr>
+        <tr><td>Восстановить базу из файла (.db)</td><td>Заменяет текущую базу целиком. После этого сервер нужно перезапустить вручную.</td></tr>
+      </table>
+      <p>Резервную копию можно снять и из командной строки, без браузера:</p>
+      <pre><code>cd server
+npm run backup</code></pre>
+      <p>Копия с меткой времени появится в папке <code>backups/</code>.</p>
+    </section>
+
+    <section id="import-export">
+      <h2>Импорт / экспорт</h2>
+      <p>Формат JSON-экспорта — массив островов, каждый со своими локациями и
+      галереей. Подходит и для бэкапа, и для переноса части данных между
+      инсталляциями — импорт полностью заменяет текущее содержимое базы,
+      так что перед импортом стоит сначала сделать собственный экспорт «на всякий
+      случай».</p>
+    </section>
+
+    <section id="security">
+      <h2>Безопасность</h2>
+      <ul>
+        <li>Секрет сессии генерируется случайно при первом запуске и хранится в
+        файле <code>server/.session-secret</code> — не публикуйте и не коммитьте его
+        (в Docker-режиме вместо файла используется переменная окружения
+        <code>SESSION_SECRET</code>, см. ниже).</li>
+        <li>Сессии хранятся в той же SQLite-базе, а не в памяти процесса — вход
+        не слетает при перезапуске сервера.</li>
+        <li>Пароль редактора — не короче 8 символов.</li>
+        <li>Аккаунты редакторов — многопользовательские и равноправные;
+        управляются через «⚙ Настройки» → «👤 Редакторы» любым вошедшим.
+        Последний оставшийся через сайт удалить нельзя.</li>
+        <li>После 5 неверных попыток входа IP блокируется на 5 минут.</li>
+        <li>Сервер отдаёт security-заголовки (<code>helmet</code>): строгий
+        Content-Security-Policy без inline-скриптов, <code>X-Content-Type-Options</code>
+        и т.д.; при работе по HTTPS дополнительно включается HSTS.</li>
+        <li>Загружаемые изображения проверяются по реальным байтам содержимого,
+        а не только по заголовку — файл с поддельным расширением будет отклонён.</li>
+        <li>Загружаемые SVG дополнительно очищаются от <code>&lt;script&gt;</code> и
+        обработчиков вида <code>onload="..."</code> (через DOMPurify) — открыть такой
+        файл напрямую по ссылке безопасно.</li>
+        <li>При удалении картинки из галереи файл действительно удаляется с диска —
+        мусор не копится. То же самое происходит при удалении острова целиком —
+        все его локации, галерея и файлы удаляются вместе с ним.</li>
+      </ul>
+    </section>
+
+    <section id="docker">
+      <h2>Docker и HTTPS</h2>
+      <p>Для локальной работы одним человеком Docker не нужен — обычный
+      <code>start.sh</code>/<code>start.bat</code> работает без изменений и без TLS.
+      Просто попробовать Docker-режим на своей машине, без домена и HTTPS:
+      <code>docker compose -f docker-compose.local.yml up -d --build</code>,
+      затем откройте <code>http://localhost:4173</code>.</p>
+      <p>Если же нужно открыть Атлас с других устройств или из интернета, в репозитории
+      есть готовый <code>docker-compose.yml</code>: он поднимает сам сервер и
+      <a href="https://caddyserver.com/" target="_blank" rel="noopener">Caddy</a> перед
+      ним, который сам получает и продлевает HTTPS-сертификат Let's Encrypt.</p>
+      <pre><code>cp .env.example .env
+# впишите SESSION_SECRET (openssl rand -hex 48) и ATLAS_DOMAIN
+docker compose up -d --build</code></pre>
+      <p>База, загруженные картинки и бэкапы живут в именованных Docker-томах и
+      переживают пересборку образа. Подробности — в <code>README.md</code>
+      корня репозитория, раздел «Docker-режим».</p>
+    </section>
+
+    <section id="cli">
+      <h2>Команды CLI</h2>
+      <p>Выполняются из папки <code>server/</code>:</p>
+      <pre><code>npm start              # запустить сервер
+npm run backup          # снять резервную копию базы
+npm run reset-password  # удалить один или все аккаунты редакторов (сервер должен быть остановлен)</code></pre>
+    </section>
+
+    <section id="architecture">
+      <h2>Устройство проекта</h2>
+      <p>Бэкенд — Node.js + Express + встроенный <code>node:sqlite</code>, без
+      нативной компиляции. Фронтенд — обычный HTML/CSS/JS без сборщика, разбит
+      на независимые модули (карта, страница острова, вики-каталог, авторизация
+      и т.д.). Подробная карта файлов — в <code>README.md</code> корня репозитория.</p>
+    </section>
+
+    <section id="legal">
+      <h2>Правовая информация</h2>
+      <p>Это неофициальный, некоммерческий фан-проект. Он не разработан и не
+      поддерживается студией ASTRUM ENTERTAINMENT / ASTRUM LAB LLC, не аффилирован
+      с ней и не претендует на официальность или полную точность сведений. Все
+      материалы собраны и систематизированы энтузиастами, не являющимися
+      сотрудниками разработчика — часть данных может быть неполной, устаревшей
+      или в будущем не соответствовать актуальному состоянию игры.</p>
+      <p>© 2026 ASTRUM LAB LLC. Все права защищены. Все товарные знаки являются
+      собственностью их правообладателей.</p>
+      <p>Исходный код сайта распространяется по лицензии MIT (см. <code>LICENSE</code>
+      в корне репозитория) — она не распространяется на бренд и материалы
+      разработчика игры.</p>
+    </section>
+
+    <div class="foot">
+      Атлас Аллодов · версия v26w31-06 · автор
+      <a href="https://www.linkedin.com/in/tarentiev-makar/" target="_blank" rel="noopener">Макар Терентьев</a>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>
