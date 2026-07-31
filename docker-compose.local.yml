@@ -1,0 +1,45 @@
+# Локальный запуск в Docker БЕЗ домена, БЕЗ Caddy, БЕЗ HTTPS — просто чтобы
+# попробовать Docker-режим или погонять на своей машине через обычный
+# http://localhost:4173. Для реальной публикации с HTTPS используйте
+# docker-compose.yml (там же объяснение) — этот файл для того не годится,
+# в нём осознанно нет TLS/secure-кук/reverse-proxy.
+#
+# Запуск:
+#   docker compose -f docker-compose.local.yml up -d --build
+# Остановка:
+#   docker compose -f docker-compose.local.yml down
+# (добавьте -v к down, если нужно ещё и стереть базу/загрузки/бэкапы)
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: atlas-allods:latest
+    restart: unless-stopped
+    environment:
+      PORT: 4173
+      ATLAS_DB_PATH: /app/data/atlas.db
+      ATLAS_UPLOAD_DIR: /app/uploads
+      ATLAS_BACKUPS_DIR: /app/backups
+      # для локальной проверки достаточно дефолта — секрет останется тем же,
+      # пока не пересоздадите том atlas-db; для чего-то серьёзнее задайте
+      # свой через переменную окружения SESSION_SECRET перед запуском
+      SESSION_SECRET: ${SESSION_SECRET:-local-dev-secret-change-me-1234567890}
+    volumes:
+      - atlas-db:/app/data
+      - atlas-uploads:/app/uploads
+      - atlas-backups:/app/backups
+    ports:
+      - "4173:4173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/api/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  atlas-db:
+  atlas-uploads:
+  atlas-backups:

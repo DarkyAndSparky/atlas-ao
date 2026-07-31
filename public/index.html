@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark light">
+<script>
+  // применяем сохранённый выбор темы до отрисовки — иначе будет вспышка не той темы
+  (function(){
+    try{
+      var t = localStorage.getItem('atlas_theme');
+      if(t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    }catch(e){}
+  })();
+</script>
+<title>Атлас Аллодов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div class="brand" id="brand">Атлас <small>Аллодов</small></div>
+    <div id="projectSwitcher" class="project-switcher"></div>
+    <div class="view-toggle" id="viewToggle">
+      <button class="view-toggle-btn active" data-view="map">🗺️ Карта</button>
+      <button class="view-toggle-btn" data-view="wiki">📖 Атлас островов</button>
+    </div>
+    <div id="searchWrap">
+      <input id="searchbox" type="text" placeholder="Поиск аллода…" autocomplete="off">
+      <div id="searchResults"></div>
+    </div>
+    <div class="filters">
+      <select id="catFilter"><option value="">Все категории</option></select>
+      <select id="facFilter"><option value="">Все фракции</option></select>
+    </div>
+    <div class="spacer"></div>
+    <input type="file" id="importInput" accept="application/json" style="display:none">
+    <input type="file" id="restoreDbInput" accept=".db" style="display:none">
+    <button id="editorToggle">Редактор</button>
+    <button class="btn" id="authBtn">Войти</button>
+    <button class="btn" id="configBtn" style="display:none;">⚙ Настройки</button>
+  </div>
+
+  <div id="authOverlay">
+    <div id="authModal">
+      <div class="am-title" id="amTitle">Вход</div>
+      <div class="am-sub" id="amSub">Введите пароль редактора.</div>
+      <input type="text" id="amUser" placeholder="Имя пользователя" autocomplete="username">
+      <input type="password" id="amPass" placeholder="Пароль" autocomplete="off">
+      <input type="password" id="amPass2" placeholder="Повторите пароль" style="display:none" autocomplete="off">
+      <div class="am-err" id="amErr"></div>
+      <div class="am-actions">
+        <button class="btn" id="amCancel">Отмена</button>
+        <button id="amSubmit">Войти</button>
+      </div>
+      <div class="am-reset" id="amReset">Забыли пароль? Сбросить учётку</div>
+    </div>
+  </div>
+
+  <div id="activeFilterBar" class="hidden">
+    <span>Фильтр: <b id="activeFilterLabel"></b></span>
+    <button id="clearFilterBtn">✕ Сбросить</button>
+  </div>
+
+  <div id="tray">
+    <h3>Неразмещённые острова</h3>
+    <div class="hint">Перетащите остров на карту, чтобы поставить метку. Размещено: <span id="trayCount">0</span> в списке.</div>
+    <button class="add-location" id="addAllodBtn">+ Новый остров</button>
+    <div id="trayList"></div>
+  </div>
+
+  <div id="mapView">
+    <div id="mapCanvas">
+      <img class="bg-map" src="assets/map-bg.svg" alt="">
+      <div class="bg-glow"></div>
+    </div>
+    <div id="emptyHint">Ни один остров ещё не размещён на карте.<br>Включите редактор и перетащите остров из списка слева.</div>
+  </div>
+
+  <div id="zoomCtrl">
+    <button id="zoomIn">+</button>
+    <button id="zoomReset">⟲</button>
+    <button id="zoomOut">−</button>
+  </div>
+
+  <div id="wikiView"></div>
+
+  <div id="configView"></div>
+
+  <div id="detailView"></div>
+
+  <div id="lightbox">
+    <button class="lb-close" id="lbClose">✕</button>
+    <button class="lb-nav lb-prev" id="lbPrev">‹</button>
+    <img id="lbImg" src="" alt="">
+    <button class="lb-nav lb-next" id="lbNext">›</button>
+    <div class="lb-count" id="lbCount"></div>
+  </div>
+
+  <div id="legalFooter">
+    <span class="legal-text">Неофициальный фан-проект. Не связан с ASTRUM ENTERTAINMENT / ASTRUM LAB LLC и не претендует на официальность или точность — сведения собраны энтузиастами и могут быть неполными, устаревшими или содержать ошибки.</span>
+    <span class="legal-copy">© 2026 ASTRUM LAB LLC. Все права защищены.</span>
+    <button id="aboutBtn" type="button">ℹ️ О системе</button>
+  </div>
+
+  <div id="aboutOverlay">
+    <div id="aboutModal">
+      <div class="about-title">О системе</div>
+
+      <div class="about-actions">
+        <button id="aboutHealthBtn" type="button">🔍 Проверить состояние</button>
+        <button id="aboutRefreshBtn" type="button">⚙️ Обновить данные</button>
+      </div>
+      <div class="about-health" id="aboutHealthResult"></div>
+
+      <div class="about-rows">
+        <div class="about-row"><span>Версия</span><b>v26w31-06</b></div>
+        <div class="about-row"><span>Аллодов в базе</span><b id="aboutCount">—</b></div>
+        <div class="about-row"><span>БД</span><b><code>server/atlas.db</code> (node:sqlite)</b></div>
+        <div class="about-row"><span>Сервер</span><b>Node.js + Express</b></div>
+        <div class="about-row"><span>Адрес</span><b><code id="aboutAddress">—</code></b></div>
+      </div>
+
+      <p class="about-desc">Атлас Аллодов — самостоятельный сайт-энциклопедия аллодов (островов) вселенной Allods Online: глобальная карта, страницы островов с историей и галереей, встроенный редактор для наполнения.</p>
+
+      <p class="about-legal">
+        Это неофициальный, некоммерческий фан-проект. Он не разработан и не поддерживается
+        студией ASTRUM ENTERTAINMENT / ASTRUM LAB LLC, не аффилирован с ней и не претендует
+        на официальность или полную точность сведений. Все материалы собраны и систематизированы
+        энтузиастами, не являющимися сотрудниками разработчика, вручную и на основе открытых
+        источников — часть данных может быть неполной, устаревшей или в будущем не соответствовать
+        актуальному состоянию игры.
+      </p>
+      <p class="about-copyright">
+        © 2026 ASTRUM LAB LLC. Все права защищены.<br>
+        Все товарные знаки являются собственностью их правообладателей.
+      </p>
+
+      <div class="about-author">
+        Автор: <a href="https://www.linkedin.com/in/tarentiev-makar/" target="_blank" rel="noopener">Макар Терентьев</a>
+      </div>
+
+      <button class="about-close" id="aboutClose">Закрыть</button>
+    </div>
+  </div>
+
+  <div id="toast"><span id="toastMsg"></span><button id="toastUndo" class="toast-undo">Отменить</button></div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/state.js"></script>
+<script src="js/islandIcons.js"></script>
+<script src="js/mapView.js"></script>
+<script src="js/projects.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/lightbox.js"></script>
+<script src="js/detailView.js"></script>
+<script src="js/wikiView.js"></script>
+<script src="js/authUI.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

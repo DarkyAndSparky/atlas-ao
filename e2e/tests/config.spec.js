@@ -1,0 +1,135 @@
+const { test, expect } = require('@playwright/test');
+const { loginViaUI, gotoReady } = require('../helpers');
+
+test.describe('Панель конфига (админ)', ()=>{
+
+  test('кнопка «Конфиг» скрыта без входа и появляется после входа', async ({ page })=>{
+    await gotoReady(page);
+    await expect(page.locator('#configBtn')).toBeHidden();
+    await loginViaUI(page);
+    await expect(page.locator('#configBtn')).toBeVisible();
+  });
+
+  test('открывается по клику и содержит все три карточки', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+    await expect(page.locator('#configView')).toHaveClass(/show/);
+    await expect(page.locator('.config-card')).toHaveCount(6);
+  });
+
+  test('смена названия обновляет шапку и title вкладки', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    await page.fill('#cfgTitle', 'E2E Тест Атлас');
+    await page.click('#cfgTitleSave');
+    await page.waitForTimeout(400);
+
+    await expect(page).toHaveTitle('E2E Тест Атлас');
+    await expect(page.locator('#brand')).toContainText('E2E Тест Атлас');
+
+    const saved = await page.evaluate(async () => (await (await fetch('/api/settings')).json()).title);
+    expect(saved).toBe('E2E Тест Атлас');
+  });
+
+  test('цвет акцента применяется сразу после сохранения (тёмная тема)', async ({ page })=>{
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    await page.evaluate(() => {
+      const el = document.getElementById('cfgAccentDark');
+      el.value = '#3399ff';
+      el.dispatchEvent(new Event('input'));
+    });
+    await page.click('#cfgAccentSave');
+    await page.waitForTimeout(400);
+
+    const gold = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim());
+    expect(gold.toLowerCase()).toBe('#3399ff');
+  });
+
+  test('загрузка и удаление логотипа', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    await expect(page.locator('#cfgLogoPreview span')).toHaveText('Логотип не установлен');
+
+    // 1x1 валидный PNG
+    const pngBuffer = Buffer.from(
+      '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753' +
+      'de0000000c4944415478da6360000002000100b0e9d5330000000049454e44ae426082',
+      'hex'
+    );
+    await page.setInputFiles('#cfgLogoFile', { name: 'logo.png', mimeType: 'image/png', buffer: pngBuffer });
+    await page.waitForTimeout(500);
+
+    await expect(page.locator('#cfgLogoPreview img')).toBeVisible();
+    await expect(page.locator('.brand-logo')).toBeVisible();
+
+    await page.click('#cfgLogoRemove');
+    await page.waitForTimeout(400);
+    await expect(page.locator('#cfgLogoPreview span')).toHaveText('Логотип не установлен');
+    await expect(page.locator('.brand-logo')).toHaveCount(0);
+  });
+
+  test('шрифт Allods West применён к заголовкам', async ({ page })=>{
+    await gotoReady(page);
+    await page.waitForTimeout(500);
+    const loaded = await page.evaluate(() => document.fonts.check('20px "Allods West"'));
+    expect(loaded).toBe(true);
+    const brandFont = await page.locator('#brand').evaluate(el => getComputedStyle(el).fontFamily);
+    expect(brandFont).toContain('Allods West');
+  });
+
+  test('переключатель темы: светлая/тёмная/авто применяются и сохраняются', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    // выбираем тёмную явно
+    await page.click('[data-theme-choice="dark"]');
+    await page.waitForTimeout(200);
+    let attr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    expect(attr).toBe('dark');
+    let stored = await page.evaluate(() => localStorage.getItem('atlas_theme'));
+    expect(stored).toBe('dark');
+
+    // выбираем светлую явно
+    await page.click('[data-theme-choice="light"]');
+    await page.waitForTimeout(200);
+    attr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    expect(attr).toBe('light');
+
+    // переживает перезагрузку страницы (без мигания — атрибут выставляется инлайн-скриптом в head)
+    await page.reload();
+    await page.waitForTimeout(300);
+    attr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    expect(attr).toBe('light');
+
+    // возврат к авто убирает атрибут и запись в localStorage
+    await page.click('#configBtn');
+    await page.click('[data-theme-choice="auto"]');
+    await page.waitForTimeout(200);
+    attr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    expect(attr).toBeNull();
+    stored = await page.evaluate(() => localStorage.getItem('atlas_theme'));
+    expect(stored).toBeNull();
+  });
+
+  test('карта центрируется по видимой области при загрузке', async ({ page })=>{
+    await page.setViewportSize({ width: 1920, height: 1000 });
+    await gotoReady(page);
+    await page.waitForTimeout(300);
+    const rect = await page.locator('#mapCanvas').evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, right: window.innerWidth - r.right };
+    });
+    expect(Math.abs(rect.left - rect.right)).toBeLessThan(5);
+  });
+
+});

@@ -1,0 +1,30 @@
+{
+  "name": "atlas-allods-server",
+  "version": "0.1.0+v26w31-06",
+  "description": "Локальный сервер Атласа Аллодов: SQLite + Express",
+  "main": "server.js",
+  "license": "MIT",
+  "author": "Макар Терентьев (https://www.linkedin.com/in/tarentiev-makar/)",
+  "repository": {
+    "type": "git",
+    "url": "REPLACE_WITH_YOUR_GITHUB_REPO_URL"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "backup": "node scripts/backup.js",
+    "reset-password": "node scripts/reset-password.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.12",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "helmet": "^8.3.0",
+    "jsdom": "^30.0.0",
+    "multer": "^2.0.0",
+    "sharp": "^0.35.3"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

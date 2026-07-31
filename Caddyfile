@@ -1,0 +1,21 @@
+{
+	# для локальных доменов без реального DNS (например atlas.localhost) Caddy сам
+	# переключится на локальный CA и самоподписанный сертификат — email не нужен.
+	email {$ATLAS_ACME_EMAIL}
+}
+
+{$ATLAS_DOMAIN} {
+	reverse_proxy app:4173
+
+	encode gzip zstd
+
+	# статику отдаём с длинным кэшем — сам сервер версионирует /uploads по хэшу
+	# в имени файла, а public/* пересобирается вместе с образом при деплое
+	@static path *.js *.css *.png *.jpg *.jpeg *.webp *.svg *.woff2
+	header @static Cache-Control "public, max-age=604800"
+
+	log {
+		output stdout
+		format console
+	}
+}
