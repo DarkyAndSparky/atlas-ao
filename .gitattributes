@@ -1,0 +1,15 @@
+# Без этого файла git может при клонировании на разных ОС поменять концы строк
+# и сломать .bat-скрипты (Windows требует CRLF) или .sh-скрипты (нужен чистый LF).
+
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.sh  text eol=lf
+
+# бинарники — не трогать вообще
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.svg binary
+*.db binary
+*.zip binary

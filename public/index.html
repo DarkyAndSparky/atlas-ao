@@ -76,8 +76,28 @@
     <div id="mapCanvas">
       <img class="bg-map" src="assets/map-bg.svg" alt="">
       <div class="bg-glow"></div>
+      <!-- Векторный слой пометок: тот же координатный box 1669×1256, что и у
+           меток островов, и тот же родитель — значит, тот же CSS-transform
+           панорамы/зума применяется к нему автоматически, текст и фигуры
+           двигаются и масштабируются идеально синхронно с картой. -->
+      <svg id="annotLayer" width="1669" height="1256" viewBox="0 0 1669 1256"></svg>
     </div>
     <div id="emptyHint">Ни один остров ещё не размещён на карте.<br>Включите редактор и перетащите остров из списка слева.</div>
+  </div>
+
+  <div id="drawToolbar" class="editor-hidden">
+    <button class="draw-tool" data-tool="text" title="Текстовая подпись">T</button>
+    <button class="draw-tool" data-tool="line" title="Линия">╱</button>
+    <button class="draw-tool" data-tool="rect" title="Прямоугольник">▭</button>
+    <button class="draw-tool" data-tool="circle" title="Круг">◯</button>
+    <button class="draw-tool" data-tool="erase" title="Стереть пометку">✕</button>
+    <div class="draw-colors">
+      <button class="draw-color active" data-color="#e8c874" style="background:#e8c874" title="Золотой"></button>
+      <button class="draw-color" data-color="#e2695f" style="background:#e2695f" title="Красный"></button>
+      <button class="draw-color" data-color="#6fd3d9" style="background:#6fd3d9" title="Голубой"></button>
+      <button class="draw-color" data-color="#8fd96f" style="background:#8fd96f" title="Зелёный"></button>
+      <button class="draw-color" data-color="#f2f2f2" style="background:#f2f2f2" title="Белый"></button>
+    </div>
   </div>
 
   <div id="zoomCtrl">
@@ -117,7 +137,7 @@
       <div class="about-health" id="aboutHealthResult"></div>
 
       <div class="about-rows">
-        <div class="about-row"><span>Версия</span><b>v26w31-06</b></div>
+        <div class="about-row"><span>Версия</span><b>v26w31-08</b></div>
         <div class="about-row"><span>Аллодов в базе</span><b id="aboutCount">—</b></div>
         <div class="about-row"><span>БД</span><b><code>server/atlas.db</code> (node:sqlite)</b></div>
         <div class="about-row"><span>Сервер</span><b>Node.js + Express</b></div>
@@ -160,6 +180,7 @@
 <script src="js/detailView.js"></script>
 <script src="js/wikiView.js"></script>
 <script src="js/authUI.js"></script>
+<script src="js/annotations.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

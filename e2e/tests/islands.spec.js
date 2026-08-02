@@ -133,4 +133,35 @@ test.describe('Клик по тегу возвращает туда, откуд�
     await expect(page.locator('#mapView')).toBeHidden();
   });
 
+  test('фильтр из тега виден и сбрасывается прямо в вики (регрессия)', async ({ page })=>{
+    await gotoReady(page);
+    await page.click('[data-view="wiki"]');
+    const link = page.locator('.wiki-island-link').first();
+    await link.click();
+
+    const field = await page.evaluate(() => {
+      const el = document.querySelector('.tag.clickable[data-field]');
+      return el ? el.dataset.field : null;
+    });
+    test.skip(!field, 'у первого острова из вики нет ни одного тега — редкий случай для сид-данных');
+
+    await page.click(`.tag.clickable[data-field="${field}"]`);
+    await page.waitForTimeout(200);
+
+    // раньше баннер активного фильтра был безусловно скрыт в вики, а дропдауны
+    // категории/фракции наверху сбрасывались на "Все..." — фильтр становился
+    // невидимым и несбрасываемым, хотя продолжал реально применяться
+    await expect(page.locator('#activeFilterBar')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#activeFilterLabel')).not.toBeEmpty();
+
+    await page.click('#clearFilterBtn');
+    await page.waitForTimeout(200);
+
+    await expect(page.locator('#activeFilterBar')).toHaveClass(/hidden/);
+    const filters = await page.evaluate(() => state.filters);
+    expect(Object.values(filters).every(v => !v)).toBe(true);
+    // после сброса остаёмся в вики (сброс не должен никуда перекидывать)
+    await expect(page.locator('#wikiView')).toHaveClass(/show/);
+  });
+
 });

@@ -84,7 +84,8 @@ document.getElementById('clearFilterBtn').addEventListener('click', ()=>{
   document.getElementById('catFilter').value='';
   document.getElementById('facFilter').value='';
   document.getElementById('searchbox').value='';
-  renderMarkers(); renderTray();
+  if(state.view==='wiki') renderWiki();
+  else{ renderMarkers(); renderTray(); }
   updateActiveFilterBar();
 });
 
@@ -254,6 +255,7 @@ function makeMarkerDraggable(el, item){
 let panning=false, panStartX, panStartY, camStartX, camStartY;
 mapView.addEventListener('mousedown', ev=>{
   if(ev.target.closest('.marker')) return;
+  if(state.drawTool) return; // рисование фигуры перетаскиванием — не панорама (см. annotations.js)
   panning=true;
   mapView.classList.add('dragging');
   panStartX=ev.clientX; panStartY=ev.clientY;

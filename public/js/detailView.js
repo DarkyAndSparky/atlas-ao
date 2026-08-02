@@ -25,17 +25,17 @@ function renderDetail(){
     <div class="detail-hero${heroImg?' has-image':''}" ${heroStyle}>
       <div class="breadcrumb">
         <span class="breadcrumb-link" data-action="show-map">Атлас</span>
-        ${item.archipelago ? ` / <span class="breadcrumb-link" data-action="filter-tag" data-field="archipelago" data-value="${escapeHtml(item.archipelago)}">${escapeHtml(item.archipelago)}</span>` : ''}
+        ${renderBreadcrumbArchipelago(item)}
         / ${escapeHtml(item.name)}
       </div>
       <h1 contenteditable="${state.editorOn}" data-field="name">${escapeHtml(item.name)}</h1>
       <button class="del-allod editor-hidden" id="delAllodBtn" title="Удалить остров">✕ Удалить остров</button>
       <div class="tag-row">
         ${(item.mapX==null || item.mapY==null) ? `<span class="tag tag-unplaced" title="Этот остров есть в базе, но не отмечен на глобальной карте">✕ не на карте</span>`:''}
-        ${item.faction? `<span class="tag fac-${facCls} clickable" data-action="filter-tag" data-field="faction" data-value="${escapeHtml(item.faction)}">${escapeHtml(item.faction)}</span>`:''}
-        ${item.category? `<span class="tag clickable" data-action="filter-tag" data-field="category" data-value="${escapeHtml(item.category)}">${escapeHtml(item.category)}</span>`:''}
-        ${item.climate? `<span class="tag clickable" data-action="filter-tag" data-field="climate" data-value="${escapeHtml(item.climate)}">${escapeHtml(item.climate)}</span>`:''}
-        ${item.size? `<span class="tag clickable" data-action="filter-tag" data-field="size" data-value="${escapeHtml(item.size)}">${escapeHtml(item.size)}</span>`:''}
+        ${renderEditableTag(item, 'faction', 'фракцию', `fac-${facCls}`)}
+        ${renderEditableTag(item, 'category', 'категорию')}
+        ${renderEditableTag(item, 'climate', 'климат')}
+        ${renderEditableTag(item, 'size', 'размер')}
       </div>
     </div>
     <div class="detail-body">
@@ -65,11 +65,12 @@ function renderDetail(){
         </div>
         <div>
           <div class="section-label">Сведения</div>
-          ${sidebarFact('Владелец', item.holder)}
+          ${sidebarFact('Владелец', item.holder, 'holder')}
           ${sidebarFact('Архипелаг', item.archipelago)}
-          ${sidebarFact('Дополнение', item.expansion)}
+          ${sidebarFact('Тип', item.type, 'type')}
+          ${sidebarFact('Дополнение', item.expansion, 'expansion')}
           ${sidebarFact('Карта локации', item.hasMap ? 'есть' : null)}
-          ${sidebarFact('Сюжет', item.plot)}
+          ${sidebarFact('Сюжет', item.plot, 'plot')}
           ${sidebarFact('Проект', item.project)}
           <div class="icon-control" id="iconControl"></div>
           <div class="icon-control" id="projectControl"></div>
@@ -127,9 +128,31 @@ function renderRelated(item){
   `;
 }
 
-function sidebarFact(label, value){
+function sidebarFact(label, value, editField){
+  if(state.editorOn && editField){
+    return `<div class="sidebar-fact clickable" data-action="edit-plain" data-field="${editField}" data-label="${escapeHtml(label)}" title="Изменить">
+      <span>${escapeHtml(label)}</span><b>${value ? escapeHtml(value) : '<span class="fact-empty">— задать —</span>'}</b>
+    </div>`;
+  }
   if(!value) return '';
   return `<div class="sidebar-fact"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
+}
+
+// Простой inline-редактор для свободнотекстовых полей сайдбара (Владелец,
+// Тип, Дополнение, Сюжет) — без списка «уже использующихся значений», в
+// отличие от editTagField(): это скорее заметки, чем таксономия.
+async function editPlainField(field, label){
+  const item = byId(state.currentId);
+  if(!item) return;
+  const answer = prompt(`${label}:`, item[field] || '');
+  if(answer===null) return;
+  const value = answer.trim();
+  try{
+    await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: value || null } });
+    item[field] = value || null;
+    renderDetail();
+    toast('Сохранено');
+  }catch(e){ toast('Ошибка: '+e.message); }
 }
 
 function renderProjectControl(item){
@@ -140,14 +163,26 @@ function renderProjectControl(item){
     <select id="projectSelect" class="project-select"></select>
   `;
   const sel = document.getElementById('projectSelect');
-  PROJECTS.forEach(p=>{
+  const currentValue = item.project || PROJECTS[0].id;
+  const knownIds = new Set(PROJECTS.map(p=>p.id));
+  const options = PROJECTS.slice();
+  if(!knownIds.has(currentValue)) options.push({ id: currentValue, label: currentValue }); // см. комментарий в renderProjectSwitcher
+  options.forEach(p=>{
     const o = document.createElement('option');
     o.value = p.id; o.textContent = p.label;
-    if((item.project||PROJECTS[0].id)===p.id) o.selected = true;
+    if(currentValue===p.id) o.selected = true;
     sel.appendChild(o);
   });
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__'; newOpt.textContent = '+ Новый проект…';
+  sel.appendChild(newOpt);
   sel.addEventListener('change', async ()=>{
-    const newProject = sel.value;
+    let newProject = sel.value;
+    if(newProject==='__new__'){
+      const name = prompt('Название нового проекта:');
+      if(!name || !name.trim()){ sel.value = currentValue; return; }
+      newProject = name.trim();
+    }
     try{
       await api(`/allods/${item.id}`, { method:'PATCH', body:{ project: newProject } });
       item.project = newProject;
@@ -229,6 +264,68 @@ function openIconSetMenu(item){
   }
 }
 
+// Тег: вне режима редактора — обычный кликабельный фильтр (как раньше).
+// В режиме редактора — клик открывает editTagField() вместо фильтрации;
+// если поле у острова ещё не заполнено, показываем «призрачную» кнопку
+// "+ добавить X", чтобы это поле вообще можно было завести впервые.
+function renderEditableTag(item, field, label, extraClass=''){
+  const value = item[field];
+  if(state.editorOn){
+    if(value){
+      return `<span class="tag ${extraClass} clickable" data-action="edit-tag" data-field="${field}" title="Изменить ${escapeHtml(label)}">${escapeHtml(value)} <span class="tag-edit-mark">✎</span></span>`;
+    }
+    return `<span class="tag tag-add-ghost clickable" data-action="edit-tag" data-field="${field}">+ ${escapeHtml(label)}</span>`;
+  }
+  if(!value) return '';
+  return `<span class="tag ${extraClass} clickable" data-action="filter-tag" data-field="${field}" data-value="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
+}
+
+function renderBreadcrumbArchipelago(item){
+  if(state.editorOn){
+    return item.archipelago
+      ? ` / <span class="breadcrumb-link" data-action="edit-tag" data-field="archipelago" title="Изменить архипелаг">${escapeHtml(item.archipelago)} ✎</span>`
+      : ` / <span class="breadcrumb-link" data-action="edit-tag" data-field="archipelago">+ архипелаг</span>`;
+  }
+  return item.archipelago
+    ? ` / <span class="breadcrumb-link" data-action="filter-tag" data-field="archipelago" data-value="${escapeHtml(item.archipelago)}">${escapeHtml(item.archipelago)}</span>`
+    : '';
+}
+
+const TAG_FIELD_LABELS = { faction:'фракцию', category:'категорию', climate:'климат', size:'размер', archipelago:'архипелаг' };
+
+// Простой «редактор фракций/категорий»: без отдельной админ-панели, но даёт
+// выбрать одно из уже используемых в базе значений (так группы не плодятся
+// в вариациях написания) либо ввести новое, либо очистить поле совсем.
+async function editTagField(field){
+  const item = byId(state.currentId);
+  if(!item) return;
+  const existing = [...new Set(state.data.map(d=>d[field]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+  let value;
+  if(existing.length){
+    const list = existing.map((v,i)=>`${i+1}. ${v}`).join('\n');
+    const label = TAG_FIELD_LABELS[field] || field;
+    const answer = prompt(
+      `Выберите номер уже существующего значения для поля «${label}», либо впишите новое (пусто — очистить поле):\n\n${list}`,
+      item[field] || ''
+    );
+    if(answer===null) return; // отмена
+    const trimmed = answer.trim();
+    const asIndex = /^\d+$/.test(trimmed) ? parseInt(trimmed,10) : null;
+    value = (asIndex && asIndex>=1 && asIndex<=existing.length) ? existing[asIndex-1] : trimmed;
+  }else{
+    const answer = prompt(`Введите значение для поля «${TAG_FIELD_LABELS[field]||field}»:`, item[field] || '');
+    if(answer===null) return;
+    value = answer.trim();
+  }
+  try{
+    await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: value || null } });
+    item[field] = value || null;
+    renderDetail();
+    renderMarkers();
+    toast('Сохранено');
+  }catch(e){ toast('Ошибка: '+e.message); }
+}
+
 function filterByTag(field, value){
   state.filters = { category:'', faction:'', q:'', archipelago:'', climate:'', size:'' };
   state.filters[field] = value;
@@ -236,7 +333,7 @@ function filterByTag(field, value){
   document.getElementById('catFilter').value = '';
   document.getElementById('facFilter').value = '';
   if(state.returnView==='wiki'){
-    showWiki();
+    showWiki(); // showWiki() сама вызывает updateActiveFilterBar()
   }else{
     showMap();
     renderMarkers(); renderTray();
@@ -605,5 +702,7 @@ detailView.addEventListener('click', (ev)=>{
   const action = el.dataset.action;
   if(action==='show-map'){ showMap(); }
   else if(action==='filter-tag'){ filterByTag(el.dataset.field, el.dataset.value); }
+  else if(action==='edit-tag'){ editTagField(el.dataset.field); }
+  else if(action==='edit-plain'){ editPlainField(el.dataset.field, el.dataset.label); }
   else if(action==='open-detail'){ openDetail(el.dataset.id); }
 });

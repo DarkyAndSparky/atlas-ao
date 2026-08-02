@@ -112,6 +112,29 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires);
 
+-- Векторные пометки на глобальной карте (слой рисования): текстовые подписи,
+-- линии, прямоугольники, круги. Координаты — в той же системе, что и mapX/mapY
+-- островов (пиксели внутри #mapCanvas 1669×1256), поэтому пометки панорамируются
+-- и масштабируются синхронно с картой и метками — не «уплывают» при зуме.
+-- Отдельная таблица, а не JSON-поле в site_settings — пометок может быть много,
+-- и каждую нужно уметь двигать/удалять по отдельности.
+CREATE TABLE IF NOT EXISTS map_annotations (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('text','line','rect','circle')),
+  x1 REAL NOT NULL,
+  y1 REAL NOT NULL,
+  x2 REAL,
+  y2 REAL,
+  r REAL,
+  text TEXT,
+  color TEXT NOT NULL DEFAULT '#e8c874',
+  stroke_width REAL NOT NULL DEFAULT 2,
+  font_size REAL NOT NULL DEFAULT 16,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_annotations_project ON map_annotations(project);
+
 CREATE INDEX IF NOT EXISTS idx_locations_allod ON locations(allod_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_owner ON gallery(owner_type, owner_id);
 `);

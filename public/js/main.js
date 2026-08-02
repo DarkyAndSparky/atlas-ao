@@ -13,6 +13,7 @@ async function boot(){
   applyCamera();
   renderMarkers();
   renderTray();
+  await loadAnnotations();
   await loadSiteSettings();
   await updateAuthUI();
 }

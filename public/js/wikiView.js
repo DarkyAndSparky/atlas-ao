@@ -23,7 +23,9 @@ function showWiki(){
   detailView.classList.remove('show');
   document.getElementById('configView').classList.remove('show');
   document.getElementById('wikiView').classList.add('show');
-  document.getElementById('activeFilterBar').classList.add('hidden');
+  updateActiveFilterBar(); // раньше тут была безусловная .add('hidden') — активный
+                            // фильтр, выставленный кликом по тегу, становился
+                            // невидимым и несбрасываемым при переходе в вики
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='wiki'));
   trayEl.classList.remove('show');
   renderWiki();

@@ -310,6 +310,33 @@ body{
 }
 #zoomCtrl button:hover{border-color:var(--gold);}
 
+/* ---------- drawing toolbar (векторный слой рисования на карте) ---------- */
+#drawToolbar{
+  position:absolute;left:20px;bottom:48px;z-index:45;
+  display:none; /* показывается только в режиме редактора — см. body.editor-on ниже */
+  flex-direction:column;gap:8px;background:var(--void-1);border:1px solid var(--line);
+  border-radius:6px;padding:8px;
+}
+body.editor-on #drawToolbar{display:flex;}
+.draw-tool{
+  width:36px;height:36px;background:var(--void-0);border:1px solid var(--line);color:var(--parchment);
+  font-size:16px;border-radius:3px;cursor:pointer;font-family:var(--ui);
+}
+.draw-tool:hover{border-color:var(--gold);}
+.draw-tool.active{border-color:var(--gold-bright);color:var(--gold-bright);box-shadow:0 0 8px rgba(232,200,116,0.5);}
+.draw-tool[data-tool="erase"]{color:var(--imperial);}
+.draw-colors{display:flex;gap:4px;justify-content:center;padding-top:2px;border-top:1px solid var(--line);}
+.draw-color{
+  width:16px;height:16px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;
+}
+.draw-color.active{border-color:var(--parchment);}
+#mapView.drawing{cursor:crosshair;}
+#annotLayer{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
+.annot-el{pointer-events:auto;}
+.annot-text{font-family:var(--ui);user-select:none;}
+#mapView.drawing .annot-el{cursor:pointer;}
+.annot-preview{pointer-events:none;opacity:0.85;stroke-dasharray:4 3;}
+
 /* ---------- DETAIL PAGE ---------- */
 #detailView{
   position:absolute;inset:0;top:var(--topbar-h,64px);overflow-y:auto;display:none;
@@ -357,6 +384,9 @@ body{
 .prose.empty::before{content:attr(data-empty);color:var(--parchment-dim);font-style:italic;}
 .sidebar-fact{font-family:var(--ui);font-size:12.5px;color:var(--parchment-dim);display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);}
 .sidebar-fact b{color:var(--parchment);font-weight:600;text-align:right;}
+.sidebar-fact.clickable{cursor:pointer;}
+.sidebar-fact.clickable:hover b{color:var(--gold-bright);}
+.sidebar-fact .fact-empty{color:var(--parchment-dim);font-weight:400;font-style:italic;}
 
 .section{margin-top:46px;}
 
@@ -532,6 +562,13 @@ body{
   display:flex;align-items:center;justify-content:center;transition:border-color .15s ease;
 }
 .project-tab img{width:100%;height:100%;object-fit:contain;}
+.project-tab-text{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  font-family:var(--ui);font-size:9px;line-height:1.15;text-align:center;
+  color:var(--parchment-dim);overflow:hidden;
+}
+.project-tab.active .project-tab-text{color:var(--gold-bright);}
+.project-tab:hover .project-tab-text{color:var(--gold);}
 .project-tab:hover{border-color:var(--gold);}
 .project-tab.active{border-color:var(--gold-bright);box-shadow:0 0 8px rgba(232,200,116,0.5);}
 
@@ -744,6 +781,9 @@ body{
 
 .tag.clickable{cursor:pointer;}
 .tag.clickable:hover{border-color:var(--gold);color:var(--gold-bright);background:rgba(201,162,75,0.08);}
+.tag.tag-add-ghost{border-style:dashed;color:var(--parchment-dim);opacity:0.75;}
+.tag.tag-add-ghost:hover{opacity:1;border-color:var(--gold);color:var(--gold-bright);}
+.tag-edit-mark{opacity:0.6;font-size:10px;margin-left:2px;}
 
 .detail-hero.has-image{
   background-size:cover;background-position:center;position:relative;

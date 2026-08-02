@@ -109,4 +109,45 @@ test.describe('Страница острова', ()=>{
     }
   });
 
+  test('фракцию/категорию/климат/размер можно редактировать (раньше — нельзя было вообще)', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await enableEditor(page);
+    await page.evaluate(() => openDetail('a025'));
+
+    // вписываем совершенно новое значение категории через prompt()
+    page.once('dialog', dialog => dialog.accept('Испытательный полигон E2E'));
+    await page.click('[data-action="edit-tag"][data-field="category"]');
+    await page.waitForTimeout(400);
+
+    await expect(page.locator('.tag[data-action="edit-tag"][data-field="category"]')).toContainText('Испытательный полигон E2E');
+
+    // значение реально сохранилось на сервере, не только в DOM
+    const saved = await page.evaluate(async () => {
+      const r = await fetch('/api/allods/a025');
+      return (await r.json()).category;
+    });
+    expect(saved).toBe('Испытательный полигон E2E');
+  });
+
+  test('пустое поле фракции показывает призрачную кнопку "+ фракцию" в редакторе', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await enableEditor(page);
+
+    // остров без фракции (создаём заведомо пустой, чтобы не зависеть от сид-данных)
+    const id = await page.evaluate(async () => {
+      const created = await (await fetch('/api/allods', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name: 'E2E Остров Без Фракции' }),
+      })).json();
+      return created.id;
+    });
+    await page.evaluate((id) => openDetail(id), id);
+
+    const ghost = page.locator('.tag-add-ghost[data-field="faction"]');
+    await expect(ghost).toBeVisible();
+    await expect(ghost).toContainText('фракцию');
+  });
+
 });

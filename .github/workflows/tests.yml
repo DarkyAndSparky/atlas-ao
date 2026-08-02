@@ -1,0 +1,63 @@
+name: Тесты
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  backend-tests:
+    name: Бэкенд (node:test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 22.5+
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.9'
+
+      - name: Установка зависимостей
+        working-directory: server
+        run: npm ci
+
+      - name: Запуск тестов
+        working-directory: server
+        run: npm test
+
+  e2e-tests:
+    name: UI/e2e (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 22.5+
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.9'
+
+      - name: Зависимости сервера
+        working-directory: server
+        run: npm ci
+
+      - name: Зависимости e2e
+        working-directory: e2e
+        run: npm ci
+
+      - name: Установка браузера Chromium (с системными зависимостями)
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Запуск UI-тестов
+        working-directory: e2e
+        run: npm test
+
+      - name: Отчёт при падении
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
