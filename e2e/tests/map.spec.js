@@ -71,4 +71,39 @@ test.describe('Глобальная карта', ()=>{
     await expect(page.locator('#mapView')).toBeVisible();
   });
 
+  test('возврат со страницы острова на карту "пингует" его маркер (регрессия по запросу)', async ({ page })=>{
+    await gotoReady(page);
+    // берём заведомо размещённый остров
+    const id = await page.evaluate(() => state.data.find(a => a.mapX != null && a.mapY != null).id);
+    await page.evaluate((id) => openDetail(id), id);
+    await page.evaluate(() => showMap());
+
+    const marker = page.locator(`.marker[data-id="${id}"]`);
+    await expect(marker).toHaveClass(/pinging/);
+    await expect(marker.locator('.marker-ping-ring')).toHaveCount(3);
+
+    // и то, и другое само сходит на нет без ручного вмешательства
+    await expect(marker).not.toHaveClass(/pinging/, { timeout: 3000 });
+    await expect(marker.locator('.marker-ping-ring')).toHaveCount(0, { timeout: 3000 });
+  });
+
+  test('переход из вики в карту через открытие острова тоже пингует его', async ({ page })=>{
+    await gotoReady(page);
+    await page.click('[data-view="wiki"]');
+    const id = await page.evaluate(() => {
+      const withCoords = state.data.find(a => a.mapX != null && a.mapY != null);
+      return withCoords.id;
+    });
+    await page.evaluate((id) => openDetail(id), id);
+    await page.click('[data-action="show-map"]'); // хлебная крошка "Атлас" на странице острова
+
+    const marker = page.locator(`.marker[data-id="${id}"]`);
+    await expect(marker).toHaveClass(/pinging/);
+  });
+
+  test('обычный заход на карту при загрузке страницы ничего не пингует', async ({ page })=>{
+    await gotoReady(page);
+    await expect(page.locator('.marker.pinging')).toHaveCount(0);
+  });
+
 });

@@ -14,6 +14,8 @@ async function boot(){
   renderMarkers();
   renderTray();
   await loadAnnotations();
+  await loadDecorations();
+  await loadFactionIcons();
   await loadSiteSettings();
   await updateAuthUI();
 }

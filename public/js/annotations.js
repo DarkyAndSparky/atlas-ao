@@ -7,10 +7,34 @@
    любом масштабе, а не «плывёт»/не размывается. */
 
 state.annotations = [];
-state.drawTool = null;   // null | 'text' | 'line' | 'rect' | 'circle' | 'erase'
+state.decorations = [];
+state.drawTool = null;   // null | 'text' | 'line' | 'rect' | 'circle' | 'icon' | 'erase'
 state.drawColor = '#e8c874';
+state.selectedDecoration = null; // url выбранного украшения для инструмента 'icon'
 
 const annotLayer = document.getElementById('annotLayer');
+const decoPicker = document.getElementById('decoPicker');
+const decoPickerGrid = document.getElementById('decoPickerGrid');
+
+async function loadDecorations(){
+  try{ state.decorations = await api('/decorations'); }
+  catch(e){ state.decorations = []; }
+}
+
+function renderDecoPicker(){
+  decoPickerGrid.innerHTML = state.decorations.map(d=>`
+    <button class="deco-picker-item ${state.selectedDecoration===d.url?'active':''}" data-url="${escapeHtml(d.url)}" title="${escapeHtml(d.name)}">
+      <img src="${escapeHtml(d.url)}" alt="${escapeHtml(d.name)}">
+    </button>
+  `).join('') || '<div class="deco-picker-empty">Украшений пока нет — добавьте в «⚙ Настройки»</div>';
+}
+
+decoPickerGrid.addEventListener('click', ev=>{
+  const btn = ev.target.closest('.deco-picker-item');
+  if(!btn) return;
+  state.selectedDecoration = btn.dataset.url;
+  renderDecoPicker();
+});
 
 async function loadAnnotations(){
   try{
@@ -69,6 +93,16 @@ function annotationToSvgEl(a){
     c.setAttribute('class', 'annot-el');
     return c;
   }
+  if(a.type==='icon'){
+    const img = document.createElementNS(SVG_NS, 'image');
+    const size = (a.r || 32) * 2;
+    img.setAttribute('x', a.x1 - size/2); img.setAttribute('y', a.y1 - size/2);
+    img.setAttribute('width', size); img.setAttribute('height', size);
+    img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', a.iconUrl);
+    img.setAttribute('href', a.iconUrl);
+    img.setAttribute('class', 'annot-el annot-icon');
+    return img;
+  }
   return null;
 }
 
@@ -87,6 +121,12 @@ document.querySelectorAll('.draw-tool').forEach(btn=>{
     state.drawTool = (state.drawTool===tool) ? null : tool; // повторный клик выключает
     document.querySelectorAll('.draw-tool').forEach(b=> b.classList.toggle('active', b.dataset.tool===state.drawTool));
     mapView.classList.toggle('drawing', !!state.drawTool);
+    if(state.drawTool==='icon'){
+      renderDecoPicker();
+      decoPicker.classList.remove('hidden');
+    }else{
+      decoPicker.classList.add('hidden');
+    }
   });
 });
 document.querySelectorAll('.draw-color').forEach(btn=>{
@@ -128,6 +168,11 @@ mapView.addEventListener('mousedown', ev=>{
   if(state.drawTool==='text'){
     const text = prompt('Текст подписи на карте:');
     if(text && text.trim()) createAnnotation({ type:'text', x1:p.x, y1:p.y, text: text.trim() });
+    return;
+  }
+  if(state.drawTool==='icon'){
+    if(!state.selectedDecoration){ toast('Сначала выберите украшение в панели слева'); return; }
+    createAnnotation({ type:'icon', x1:p.x, y1:p.y, iconUrl: state.selectedDecoration, r: 32 });
     return;
   }
 
@@ -195,5 +240,6 @@ document.getElementById('editorToggle').addEventListener('click', ()=>{
     state.drawTool = null;
     document.querySelectorAll('.draw-tool').forEach(b=> b.classList.remove('active'));
     mapView.classList.remove('drawing');
+    decoPicker.classList.add('hidden');
   }
 });

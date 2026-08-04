@@ -15,7 +15,7 @@ test.describe('Панель конфига (админ)', ()=>{
     await loginViaUI(page);
     await page.click('#configBtn');
     await expect(page.locator('#configView')).toHaveClass(/show/);
-    await expect(page.locator('.config-card')).toHaveCount(6);
+    await expect(page.locator('.config-card')).toHaveCount(8);
   });
 
   test('смена названия обновляет шапку и title вкладки', async ({ page })=>{
@@ -130,6 +130,101 @@ test.describe('Панель конфига (админ)', ()=>{
       return { left: r.left, right: window.innerWidth - r.right };
     });
     expect(Math.abs(rect.left - rect.right)).toBeLessThan(5);
+  });
+
+  test('панель настроек: стартовый набор украшений виден и в него можно добавить своё', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    await expect(page.locator('.deco-manage-item')).toHaveCount(10);
+
+    await page.fill('#cfgNewDecoName', 'E2E Своя картинка');
+    await page.setInputFiles('#cfgNewDecoFile', {
+      name: 'e2e-deco.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753' +
+        'de0000000c4944415478da6360000002000100b0e9d5330000000049454e44ae426082', 'hex'),
+    });
+    await page.click('#cfgAddDecoBtn');
+    await page.waitForTimeout(500);
+
+    await expect(page.locator('.deco-manage-item')).toHaveCount(11);
+    await expect(page.locator('.deco-manage-item')).toContainText('E2E Своя картинка');
+  });
+
+  test('панель настроек: удаление украшения убирает его из списка', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    await page.fill('#cfgNewDecoName', 'E2E Удалю Меня');
+    await page.setInputFiles('#cfgNewDecoFile', {
+      name: 'e2e-deco-2.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753' +
+        'de0000000c4944415478da6360000002000100b0e9d5330000000049454e44ae426082', 'hex'),
+    });
+    await page.click('#cfgAddDecoBtn');
+    await page.waitForTimeout(500);
+    await expect(page.locator('.deco-manage-item', { hasText: 'E2E Удалю Меня' })).toHaveCount(1);
+
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('.deco-manage-item', { hasText: 'E2E Удалю Меня' }).locator('.deco-del').click();
+    await page.waitForTimeout(500);
+
+    await expect(page.locator('.deco-manage-item', { hasText: 'E2E Удалю Меня' })).toHaveCount(0);
+  });
+
+  test('панель настроек: стартовый набор иконок фракций виден и в него можно добавить свою', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    await expect(page.locator('.faction-manage-item')).toHaveCount(8);
+
+    await page.fill('#cfgNewFactionName', 'E2E Тестовая Фракция');
+    await page.setInputFiles('#cfgNewFactionFile', {
+      name: 'e2e-faction.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753' +
+        'de0000000c4944415478da6360000002000100b0e9d5330000000049454e44ae426082', 'hex'),
+    });
+    await page.click('#cfgAddFactionBtn');
+    await page.waitForTimeout(500);
+
+    await expect(page.locator('.faction-manage-item')).toHaveCount(9);
+  });
+
+  test('панель настроек: переименование иконки фракции сохраняется', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    const input = page.locator('.faction-name-input').first();
+    const oldValue = await input.inputValue();
+    await input.fill(oldValue + ' (переименовано)');
+    await input.blur();
+    await page.waitForTimeout(500);
+
+    const values = await page.locator('.faction-name-input').evaluateAll(els => els.map(e => e.value));
+    expect(values).toContain(oldValue + ' (переименовано)');
+  });
+
+  test('панель настроек: удаление иконки фракции убирает её из списка', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await page.click('#configBtn');
+
+    const before = await page.locator('.faction-manage-item').count();
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('.faction-del').first().click();
+    await page.waitForTimeout(500);
+
+    await expect(page.locator('.faction-manage-item')).toHaveCount(before - 1);
   });
 
 });

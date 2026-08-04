@@ -121,6 +121,31 @@ test('повторная регистрация того же имени пол�
   assert.equal(r.status, 409);
 });
 
+test('то же самое, но кириллицей — регистр не должен позволять завести дубль (регрессия)', async ()=>{
+  // SQLite COLLATE NOCASE регистронезависимость для кириллицы не работает
+  // (только ASCII a-z/A-Z) — тест выше с латиницей эту проблему не ловит
+  const c = makeClient();
+  await c.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
+  const created = await c.post('/api/auth/register', { username: 'Смотритель', password: 'watchtowerpass1' });
+  assert.equal(created.status, 200);
+  const dup = await c.post('/api/auth/register', { username: 'смотритель', password: 'anotherpass123' });
+  assert.equal(dup.status, 409);
+
+  // не оставляем след в общем списке аккаунтов — на него завязаны другие тесты дальше по файлу
+  await c.del('/api/auth/users/' + created.data.user.id);
+});
+
+test('вход кириллическим именем в другом регистре, чем при регистрации, всё равно работает (регрессия)', async ()=>{
+  const c = makeClient();
+  await c.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
+  const created = await c.post('/api/auth/register', { username: 'Хранитель', password: 'guardianpass1' });
+
+  const login = await makeClient().post('/api/auth/login', { username: 'ХРАНИТЕЛЬ', password: 'guardianpass1' });
+  assert.equal(login.status, 200, 'логин не должен зависеть от регистра даже для кириллицы');
+
+  await c.del('/api/auth/users/' + created.data.user.id);
+});
+
 test('новый клиент (без cookie) не залогинен, пока сам не войдёт', async ()=>{
   const c = makeClient();
   const status = await c.get('/api/auth/status');

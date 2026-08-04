@@ -20,6 +20,16 @@ function publicUser(u){
   return { id: u.id, username: u.username, createdAt: u.created_at };
 }
 
+// SQLite's COLLATE NOCASE only case-folds ASCII (A-Z/a-z) — 'Империя' и
+// 'империя' в кириллице SQLite считает РАЗНЫМИ строками даже с COLLATE
+// NOCASE в запросе или в схеме таблицы. Логин у нас разрешает кириллицу
+// (см. USERNAME_RE), поэтому регистронезависимый поиск делаем в JS через
+// String.toLowerCase(), которая кириллицу обрабатывает правильно.
+function findUserByUsername(username){
+  const target = username.toLowerCase();
+  return db.prepare('SELECT * FROM users').all().find(u => u.username.toLowerCase() === target);
+}
+
 router.get('/status', (req, res)=>{
   res.json({
     hasAccount: countUsers() > 0,
@@ -48,7 +58,7 @@ router.post('/register', (req, res)=>{
     return res.status(400).json({ error: 'Имя пользователя: 3–32 символа, буквы/цифры/дефис/подчёркивание.' });
   }
   if(!password || password.length < 8) return res.status(400).json({ error: 'Пароль должен быть не короче 8 символов.' });
-  const exists = db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(username);
+  const exists = findUserByUsername(username);
   if(exists) return res.status(409).json({ error: 'Такое имя пользователя уже занято.' });
 
   const salt = makeSalt();
@@ -70,7 +80,7 @@ router.post('/login', (req, res)=>{
     return res.status(429).json({ error: `Слишком много неудачных попыток. Повторите через ${lockState.secondsLeft} сек.` });
   }
   const username = (req.body.username || '').trim();
-  const user = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username);
+  const user = findUserByUsername(username);
   const { password } = req.body;
   // сверяем пароль даже если пользователь не найден (с фиктивной солью) —
   // чтобы по времени ответа нельзя было угадать, существует ли имя пользователя

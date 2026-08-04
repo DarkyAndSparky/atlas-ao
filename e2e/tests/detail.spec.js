@@ -150,4 +150,25 @@ test.describe('Страница острова', ()=>{
     await expect(ghost).toContainText('фракцию');
   });
 
+  test('иконка фракции показывается рядом с тегом, если для неё есть иконка в библиотеке', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await enableEditor(page);
+
+    const id = await page.evaluate(async () => {
+      const created = await (await fetch('/api/allods', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name: 'E2E Остров Гиберлингов' }),
+      })).json();
+      await fetch(`/api/allods/${created.id}`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ faction: 'гиберлинги' }), // другой регистр — иконка всё равно должна найтись
+      });
+      return created.id;
+    });
+    await page.evaluate((id) => openDetail(id), id);
+
+    await expect(page.locator('.tag[data-field="faction"] .tag-faction-icon')).toHaveCount(1);
+  });
+
 });

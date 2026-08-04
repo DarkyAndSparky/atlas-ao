@@ -118,6 +118,7 @@ function renderMarkers(){
     const m = document.createElement('div');
     m.className = 'marker' + (state.editorOn ? ' editable' : '');
     m.dataset.fac = item.faction;
+    m.dataset.id = item.id;
     m.style.left = item.mapX + 'px';
     m.style.top = item.mapY + 'px';
     const icon = dotIcon(item);
@@ -351,6 +352,10 @@ mapView.addEventListener('touchend', ev=>{
 
 /* ====================== VIEW SWITCHING ====================== */
 function showMap(){
+  // если уходим со страницы конкретного острова — запомним, кого поймать
+  // пингом на карте (маркеры не пересоздаются при переключении вида, так что
+  // можно смело искать элемент сразу после рендера, без ожидания)
+  const pingId = (state.view==='detail' || state.view==='location') ? state.currentId : null;
   state.view='map'; state.currentId=null; state.currentLocId=null;
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
@@ -359,6 +364,29 @@ function showMap(){
   document.getElementById('zoomCtrl').style.display='flex';
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='map'));
   renderTray();
+  if(pingId) setTimeout(()=> pingMarker(pingId), 0);
+}
+
+// «Пинг» — острову, со страницы которого только что ушли, на карте моргает
+// иконка и расходятся кольца волнами, чтобы сразу было видно, где он.
+function pingMarker(id){
+  const el = document.querySelector(`.marker[data-id="${cssEscape(id)}"]`);
+  if(!el) return; // остров мог быть не размещён на карте вообще
+  const dot = el.querySelector('.dot');
+  if(!dot) return;
+  el.classList.add('pinging');
+  const ringCount = 3;
+  for(let i=0;i<ringCount;i++){
+    const ring = document.createElement('div');
+    ring.className = 'marker-ping-ring';
+    ring.style.animationDelay = (i*0.28)+'s';
+    dot.appendChild(ring);
+    setTimeout(()=> ring.remove(), 1700 + i*280);
+  }
+  setTimeout(()=> el.classList.remove('pinging'), 2000);
+}
+function cssEscape(s){
+  return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&');
 }
 document.getElementById('brand').addEventListener('click', showMap);
 document.querySelectorAll('.view-toggle-btn').forEach(btn=>{

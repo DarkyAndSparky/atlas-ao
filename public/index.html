@@ -90,6 +90,7 @@
     <button class="draw-tool" data-tool="line" title="Линия">╱</button>
     <button class="draw-tool" data-tool="rect" title="Прямоугольник">▭</button>
     <button class="draw-tool" data-tool="circle" title="Круг">◯</button>
+    <button class="draw-tool" data-tool="icon" title="Украшение (картинка)">🖼</button>
     <button class="draw-tool" data-tool="erase" title="Стереть пометку">✕</button>
     <div class="draw-colors">
       <button class="draw-color active" data-color="#e8c874" style="background:#e8c874" title="Золотой"></button>
@@ -98,6 +99,11 @@
       <button class="draw-color" data-color="#8fd96f" style="background:#8fd96f" title="Зелёный"></button>
       <button class="draw-color" data-color="#f2f2f2" style="background:#f2f2f2" title="Белый"></button>
     </div>
+  </div>
+
+  <div id="decoPicker" class="hidden">
+    <div class="deco-picker-title">Выберите украшение, затем кликните на карте</div>
+    <div class="deco-picker-grid" id="decoPickerGrid"></div>
   </div>
 
   <div id="zoomCtrl">
@@ -137,7 +143,7 @@
       <div class="about-health" id="aboutHealthResult"></div>
 
       <div class="about-rows">
-        <div class="about-row"><span>Версия</span><b>v26w31-08</b></div>
+        <div class="about-row"><span>Версия</span><b>v26w31-10</b></div>
         <div class="about-row"><span>Аллодов в базе</span><b id="aboutCount">—</b></div>
         <div class="about-row"><span>БД</span><b><code>server/atlas.db</code> (node:sqlite)</b></div>
         <div class="about-row"><span>Сервер</span><b>Node.js + Express</b></div>

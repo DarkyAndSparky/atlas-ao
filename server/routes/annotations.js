@@ -5,7 +5,7 @@ const { requireAuth } = require('./auth');
 
 const router = express.Router();
 
-const TYPES = new Set(['text', 'line', 'rect', 'circle']);
+const TYPES = new Set(['text', 'line', 'rect', 'circle', 'icon']);
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 function toNum(v){
@@ -17,7 +17,8 @@ function rowToAnnotation(row){
   return {
     id: row.id, project: row.project, type: row.type,
     x1: row.x1, y1: row.y1, x2: row.x2, y2: row.y2, r: row.r,
-    text: row.text, color: row.color, strokeWidth: row.stroke_width, fontSize: row.font_size,
+    text: row.text, iconUrl: row.icon_url, color: row.color,
+    strokeWidth: row.stroke_width, fontSize: row.font_size,
   };
 }
 
@@ -36,7 +37,7 @@ router.post('/annotations', requireAuth, (req, res)=>{
   const x1 = toNum(b.x1), y1 = toNum(b.y1);
   if(x1===null || y1===null) return res.status(400).json({ error: 'Некорректные координаты' });
 
-  let x2=null, y2=null, r=null;
+  let x2=null, y2=null, r=null, iconUrl=null;
   if(b.type==='line' || b.type==='rect'){
     x2 = toNum(b.x2); y2 = toNum(b.y2);
     if(x2===null || y2===null) return res.status(400).json({ error: 'Для линии/прямоугольника нужна вторая точка' });
@@ -48,18 +49,27 @@ router.post('/annotations', requireAuth, (req, res)=>{
   if(b.type==='text' && (!b.text || !String(b.text).trim())){
     return res.status(400).json({ error: 'Текст подписи не может быть пустым' });
   }
+  if(b.type==='icon'){
+    // iconUrl должен быть из управляемой библиотеки украшений, а не
+    // произвольной строкой — иначе кто угодно мог бы вставить в src ссылку
+    // на сторонний домен под видом украшения
+    const known = db.prepare('SELECT 1 FROM decoration_icons WHERE url=?').get(b.iconUrl);
+    if(!known) return res.status(400).json({ error: 'Неизвестное украшение — сначала добавьте его в библиотеку' });
+    iconUrl = b.iconUrl;
+    r = Math.min(Math.max(toNum(b.r) || 32, 12), 200);
+  }
 
   const color = HEX_COLOR_RE.test(b.color) ? b.color : '#e8c874';
   const strokeWidth = Math.min(Math.max(toNum(b.strokeWidth) || 2, 1), 20);
   const fontSize = Math.min(Math.max(toNum(b.fontSize) || 16, 8), 72);
 
   const id = 'ann_' + crypto.randomBytes(8).toString('hex');
-  db.prepare(`INSERT INTO map_annotations (id, project, type, x1, y1, x2, y2, r, text, color, stroke_width, font_size, created_at)
-    VALUES (@id,@project,@type,@x1,@y1,@x2,@y2,@r,@text,@color,@strokeWidth,@fontSize,@createdAt)`)
+  db.prepare(`INSERT INTO map_annotations (id, project, type, x1, y1, x2, y2, r, text, icon_url, color, stroke_width, font_size, created_at)
+    VALUES (@id,@project,@type,@x1,@y1,@x2,@y2,@r,@text,@iconUrl,@color,@strokeWidth,@fontSize,@createdAt)`)
     .run({
       id, project: b.project, type: b.type, x1, y1, x2, y2, r,
       text: b.type==='text' ? String(b.text).trim().slice(0, 500) : null,
-      color, strokeWidth, fontSize, createdAt: Date.now(),
+      iconUrl, color, strokeWidth, fontSize, createdAt: Date.now(),
     });
   res.json(rowToAnnotation(db.prepare('SELECT * FROM map_annotations WHERE id=?').get(id)));
 });

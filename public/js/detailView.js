@@ -270,14 +270,16 @@ function openIconSetMenu(item){
 // "+ добавить X", чтобы это поле вообще можно было завести впервые.
 function renderEditableTag(item, field, label, extraClass=''){
   const value = item[field];
+  const iconUrl = field==='faction' ? factionIconFor(value) : null;
+  const iconHtml = iconUrl ? `<img class="tag-faction-icon" src="${escapeHtml(iconUrl)}" alt="">` : '';
   if(state.editorOn){
     if(value){
-      return `<span class="tag ${extraClass} clickable" data-action="edit-tag" data-field="${field}" title="Изменить ${escapeHtml(label)}">${escapeHtml(value)} <span class="tag-edit-mark">✎</span></span>`;
+      return `<span class="tag ${extraClass} clickable" data-action="edit-tag" data-field="${field}" title="Изменить ${escapeHtml(label)}">${iconHtml}${escapeHtml(value)} <span class="tag-edit-mark">✎</span></span>`;
     }
     return `<span class="tag tag-add-ghost clickable" data-action="edit-tag" data-field="${field}">+ ${escapeHtml(label)}</span>`;
   }
   if(!value) return '';
-  return `<span class="tag ${extraClass} clickable" data-action="filter-tag" data-field="${field}" data-value="${escapeHtml(value)}">${escapeHtml(value)}</span>`;
+  return `<span class="tag ${extraClass} clickable" data-action="filter-tag" data-field="${field}" data-value="${escapeHtml(value)}">${iconHtml}${escapeHtml(value)}</span>`;
 }
 
 function renderBreadcrumbArchipelago(item){

@@ -10,6 +10,8 @@ const allodsRouter = require('./routes/allods');
 const backupRouter = require('./routes/backup');
 const settingsRouter = require('./routes/settings');
 const annotationsRouter = require('./routes/annotations');
+const decorationsRouter = require('./routes/decorations');
+const factionsRouter = require('./routes/factions');
 const { UPLOAD_DIR } = require('./upload');
 
 require('./db'); // инициализирует (и при первом запуске засеивает) базу до старта сервера
@@ -72,6 +74,8 @@ function createApp(){
   app.use('/api/backup', backupRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api', annotationsRouter);
+  app.use('/api', decorationsRouter);
+  app.use('/api', factionsRouter);
 
   app.use('/uploads', express.static(UPLOAD_DIR));
   app.use(express.static(path.join(__dirname, '..', 'public')));

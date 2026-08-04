@@ -59,7 +59,7 @@ function renderWiki(){
 
   groups.forEach(group=>{
     html += `<div class="wiki-faction-group">
-      <h2 class="wiki-faction-title">${escapeHtml(group.key)} <span class="wiki-count">${group.items.length}</span></h2>`;
+      <h2 class="wiki-faction-title">${factionGroupIconHtml(group.key)}${escapeHtml(group.key)} <span class="wiki-count">${group.items.length}</span></h2>`;
     WIKI_SIZE_ORDER.forEach(sizeKey=>{
       const items = group.items.filter(d=>(d.size||'?')===sizeKey)
         .sort((a,b)=>a.name.localeCompare(b.name,'ru'));
@@ -107,6 +107,11 @@ function renderWiki(){
 function currentProjectLabel(){
   const p = PROJECTS.find(p=>p.id===state.project);
   return p ? p.label : state.project;
+}
+
+function factionGroupIconHtml(groupKey){
+  const url = factionIconFor(groupKey);
+  return url ? `<img class="wiki-faction-icon" src="${escapeHtml(url)}" alt="">` : '';
 }
 
 /* wikiView-обёртка не пересоздаётся между рендерами (только innerHTML внутри неё),

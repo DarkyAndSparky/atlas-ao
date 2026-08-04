@@ -121,19 +121,44 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires);
 CREATE TABLE IF NOT EXISTS map_annotations (
   id TEXT PRIMARY KEY,
   project TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('text','line','rect','circle')),
+  -- тип не ограничен CHECK — список допустимых значений живёт в коде
+  -- (server/routes/annotations.js), т.к. CHECK нельзя расширить на лету
+  -- ALTER-ом для уже существующих баз (см. миграцию ниже)
+  type TEXT NOT NULL,
   x1 REAL NOT NULL,
   y1 REAL NOT NULL,
   x2 REAL,
   y2 REAL,
   r REAL,
   text TEXT,
+  icon_url TEXT,
   color TEXT NOT NULL DEFAULT '#e8c874',
   stroke_width REAL NOT NULL DEFAULT 2,
   font_size REAL NOT NULL DEFAULT 16,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_annotations_project ON map_annotations(project);
+
+-- Библиотека украшений для слоя рисования (астральные обломки/аномалии/etc.) —
+-- управляемый набор, а не хардкод в JS: редакторы могут добавлять свои
+-- картинки через настройки, плюс стартовый набор засевается автоматически
+-- (см. ниже, блок isNew).
+CREATE TABLE IF NOT EXISTS decoration_icons (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- Иконки фракций (Гиберлинги/Кания/Империя/... — то, что реально стоит в
+-- поле allods.faction) — управляемая таблица, не хардкод. Совпадение по
+-- точному названию фракции (без учёта регистра), см. server/routes/factions.js.
+CREATE TABLE IF NOT EXISTS faction_icons (
+  id TEXT PRIMARY KEY,
+  faction TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  icon_url TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 
 CREATE INDEX IF NOT EXISTS idx_locations_allod ON locations(allod_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_owner ON gallery(owner_type, owner_id);
@@ -180,6 +205,26 @@ if(legacyAuth && !hasAnyUser){
   db.prepare('DELETE FROM auth WHERE id=1').run();
 }
 
+// миграция: старые базы уже содержали map_annotations со CHECK-ограничением
+// на тип ('text'/'line'/'rect'/'circle') и без колонки icon_url — SQLite не
+// умеет ALTER-ом снять CHECK, поэтому при необходимости пересобираем таблицу
+const annotCols = db.prepare("PRAGMA table_info(map_annotations)").all().map(c=>c.name);
+if(annotCols.length && !annotCols.includes('icon_url')){
+  console.log('Миграция: обновляю таблицу map_annotations (добавляю тип "icon" для украшений)...');
+  db.exec('ALTER TABLE map_annotations RENAME TO map_annotations_old');
+  db.exec(`CREATE TABLE map_annotations (
+    id TEXT PRIMARY KEY, project TEXT NOT NULL, type TEXT NOT NULL,
+    x1 REAL NOT NULL, y1 REAL NOT NULL, x2 REAL, y2 REAL, r REAL,
+    text TEXT, icon_url TEXT, color TEXT NOT NULL DEFAULT '#e8c874',
+    stroke_width REAL NOT NULL DEFAULT 2, font_size REAL NOT NULL DEFAULT 16,
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec(`INSERT INTO map_annotations (id, project, type, x1, y1, x2, y2, r, text, color, stroke_width, font_size, created_at)
+    SELECT id, project, type, x1, y1, x2, y2, r, text, color, stroke_width, font_size, created_at FROM map_annotations_old`);
+  db.exec('DROP TABLE map_annotations_old');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_annotations_project ON map_annotations(project)');
+}
+
 if(isNew){
   console.log('Новая база — засеваю данными из seed-data.json...');
   const seed = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-data.json'), 'utf-8'));
@@ -207,6 +252,49 @@ if(isNew){
   });
   tx(seed);
   console.log(`Засеяно аллодов: ${seed.length}`);
+}
+
+// стартовый набор украшений для слоя рисования — идёт в комплекте (файлы в
+// public/assets/decorations/, не в uploads/), но таблица управляемая: через
+// настройки редакторы добавляют свои картинки поверх этого набора, не хардкод
+const hasDecorations = db.prepare('SELECT id FROM decoration_icons LIMIT 1').get();
+if(!hasDecorations){
+  const seedDecorations = [
+    { id: 'dec_astral', name: 'Астрал', file: 'astral.png' },
+    { id: 'dec_astral_turret', name: 'Астральная турель', file: 'astral-turret.png' },
+    { id: 'dec_astral_unit', name: 'Астральный юнит', file: 'astral-unit.png' },
+    { id: 'dec_astral_ship', name: 'Астральный корабль', file: 'astral-ship.png' },
+    { id: 'dec_astral_island', name: 'Астральный остров', file: 'astral-island.png' },
+    { id: 'dec_wreckage', name: 'Обломки', file: 'wreckage.png' },
+    { id: 'dec_anomaly_1', name: 'Астральная аномалия 1', file: 'astral-anomaly-1.png' },
+    { id: 'dec_anomaly_2', name: 'Астральная аномалия 2', file: 'astral-anomaly-2.png' },
+    { id: 'dec_anomaly_3', name: 'Астральная аномалия 3', file: 'astral-anomaly-3.png' },
+    { id: 'dec_anomaly_4', name: 'Астральная аномалия 4', file: 'astral-anomaly-4.png' },
+  ];
+  const insertDec = db.prepare('INSERT INTO decoration_icons (id, name, url, created_at) VALUES (?,?,?,?)');
+  seedDecorations.forEach(d=> insertDec.run(d.id, d.name, '/assets/decorations/'+d.file, Date.now()));
+  console.log(`Засеяно украшений для карты: ${seedDecorations.length}`);
+}
+
+// стартовый набор иконок фракций — тоже управляемая таблица, не хардкод;
+// это race-уровень (Кания/Гиберлинги/...), отдельно от общих
+// Имперский/Лигийский/Эльфийский/Нейтральный аллод, которые уже есть в данных —
+// какую иконку на что назначать, решает редактор через настройки
+const hasFactionIcons = db.prepare('SELECT id FROM faction_icons LIMIT 1').get();
+if(!hasFactionIcons){
+  const seedFactionIcons = [
+    { id: 'fac_hadagan', faction: 'Хадаган', file: 'hadagan.png' },
+    { id: 'fac_praiden', faction: 'Прайден', file: 'praiden.png' },
+    { id: 'fac_orc', faction: 'Орки', file: 'orc.png' },
+    { id: 'fac_kania', faction: 'Кания', file: 'kania.png' },
+    { id: 'fac_undead', faction: 'Нежить', file: 'undead.png' },
+    { id: 'fac_aed', faction: 'Аэд', file: 'aed.png' },
+    { id: 'fac_elf', faction: 'Эльфы', file: 'elf.png' },
+    { id: 'fac_gibberling', faction: 'Гиберлинги', file: 'gibberling.png' },
+  ];
+  const insertFac = db.prepare('INSERT INTO faction_icons (id, faction, icon_url, created_at) VALUES (?,?,?,?)');
+  seedFactionIcons.forEach(f=> insertFac.run(f.id, f.faction, '/assets/factions/'+f.file, Date.now()));
+  console.log(`Засеяно иконок фракций: ${seedFactionIcons.length}`);
 }
 
 // гарантируем, что строка настроек сайта всегда есть (id=1, singleton)

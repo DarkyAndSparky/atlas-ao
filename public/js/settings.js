@@ -4,6 +4,20 @@
    и применяются на лету через CSS-переменные. */
 
 let siteSettings = null;
+state.factionIcons = []; // [{id, faction, icon_url}] — управляемая библиотека, см. routes/factions.js
+
+async function loadFactionIcons(){
+  try{ state.factionIcons = await api('/factions'); }
+  catch(e){ state.factionIcons = []; }
+}
+// см. комментарий в server/routes/auth.js про COLLATE NOCASE и кириллицу —
+// та же причина регистронезависимого сравнения строго через toLowerCase() в JS
+function factionIconFor(faction){
+  if(!faction) return null;
+  const target = faction.toLowerCase();
+  const row = state.factionIcons.find(f => f.faction.toLowerCase() === target);
+  return row ? row.icon_url : null;
+}
 
 async function loadSiteSettings(){
   try{
@@ -113,6 +127,8 @@ async function renderConfigPanel(){
   const s = siteSettings || {};
   const storedTheme = getStoredTheme(); // null | 'light' | 'dark'
   const users = await api('/auth/users').catch(()=>[]);
+  const decorations = await api('/decorations').catch(()=>[]);
+  const factionIconsList = await api('/factions').catch(()=>[]);
 
   wrap.innerHTML = `
     <div class="config-hero">
@@ -204,6 +220,53 @@ async function renderConfigPanel(){
           <input type="password" id="cfgCurPass" class="config-input" placeholder="Текущий пароль" style="max-width:220px;">
           <input type="password" id="cfgNewOwnPass" class="config-input" placeholder="Новый пароль" style="max-width:220px;">
           <button class="btn" id="cfgChangePassBtn">Сменить пароль</button>
+        </div>
+      </div>
+
+      <div class="config-card config-card-wide">
+        <h3>🖼 Украшения карты</h3>
+        <p class="config-hint">Набор картинок для инструмента «Украшение» на панели рисования
+        (слева внизу на карте, в режиме редактора). Стартовый набор идёт в комплекте —
+        можно добавлять свои или убирать ненужные, список не зашит в код.</p>
+        <div class="deco-manage-grid" id="decoManageGrid">
+          ${decorations.map(d=>`
+            <div class="deco-manage-item" title="${escapeHtml(d.name)}">
+              <img src="${escapeHtml(d.url)}" alt="${escapeHtml(d.name)}">
+              <span>${escapeHtml(d.name)}</span>
+              <button class="deco-del" data-id="${escapeHtml(d.id)}" data-name="${escapeHtml(d.name)}" title="Удалить">✕</button>
+            </div>`).join('') || '<p class="config-hint">Пока ничего нет.</p>'}
+        </div>
+        <h4 class="config-subhead">Добавить украшение</h4>
+        <div class="config-actions">
+          <input type="text" id="cfgNewDecoName" class="config-input" placeholder="Название" style="max-width:220px;">
+          <input type="file" id="cfgNewDecoFile" accept="image/*">
+          <button class="btn" id="cfgAddDecoBtn">Добавить</button>
+        </div>
+      </div>
+
+      <div class="config-card config-card-wide">
+        <h3>🛡 Иконки фракций</h3>
+        <p class="config-hint">Иконка показывается рядом с тегом фракции на странице острова и в заголовке
+        группы в «Атласе островов» — там, где название фракции у острова совпадает с одной из
+        перечисленных ниже (без учёта регистра). Не хардкод — список полностью управляемый:
+        замените картинку, переименуйте фракцию или добавьте новую.</p>
+        <div class="faction-manage-grid" id="factionManageGrid">
+          ${factionIconsList.map(f=>`
+            <div class="faction-manage-item">
+              <label class="faction-manage-thumb" title="Заменить картинку">
+                <img src="${escapeHtml(f.icon_url)}" alt="${escapeHtml(f.faction)}">
+                <input type="file" accept="image/*" class="faction-replace-input" data-id="${escapeHtml(f.id)}">
+              </label>
+              <input type="text" class="faction-name-input config-input" value="${escapeHtml(f.faction)}"
+                     data-id="${escapeHtml(f.id)}" data-prev="${escapeHtml(f.faction)}">
+              <button class="icon-del-btn faction-del" data-id="${escapeHtml(f.id)}" data-name="${escapeHtml(f.faction)}" title="Удалить">✕</button>
+            </div>`).join('') || '<p class="config-hint">Пока ничего нет.</p>'}
+        </div>
+        <h4 class="config-subhead">Добавить фракцию</h4>
+        <div class="config-actions">
+          <input type="text" id="cfgNewFactionName" class="config-input" placeholder="Название фракции" style="max-width:220px;">
+          <input type="file" id="cfgNewFactionFile" accept="image/*">
+          <button class="btn" id="cfgAddFactionBtn">Добавить</button>
         </div>
       </div>
 
@@ -322,6 +385,96 @@ async function renderConfigPanel(){
       document.getElementById('cfgCurPass').value = '';
       document.getElementById('cfgNewOwnPass').value = '';
     }catch(e){ toast('Ошибка: '+e.message); }
+  });
+
+  /* ---- украшения для слоя рисования ---- */
+  document.getElementById('cfgAddDecoBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('cfgNewDecoName').value.trim();
+    const fileInput = document.getElementById('cfgNewDecoFile');
+    const file = fileInput.files[0];
+    if(!name || !file) return toast('Укажите название и выберите файл');
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('image', file);
+    try{
+      await api('/decorations', { method:'POST', body: fd });
+      toast('Украшение добавлено: '+name);
+      await loadDecorations(); // обновляем библиотеку и в самом пикере на карте
+      renderConfigPanel();
+    }catch(e){ toast('Ошибка: '+e.message); }
+  });
+
+  document.querySelectorAll('.deco-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm('Убрать украшение «'+btn.dataset.name+'» из библиотеки? Уже расставленные на карте копии не исчезнут.')) return;
+      try{
+        await api('/decorations/'+btn.dataset.id, { method:'DELETE' });
+        toast('Украшение удалено');
+        await loadDecorations();
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
+    });
+  });
+
+  /* ---- иконки фракций ---- */
+  document.getElementById('cfgAddFactionBtn').addEventListener('click', async ()=>{
+    const faction = document.getElementById('cfgNewFactionName').value.trim();
+    const fileInput = document.getElementById('cfgNewFactionFile');
+    const file = fileInput.files[0];
+    if(!faction || !file) return toast('Укажите название фракции и выберите файл');
+    const fd = new FormData();
+    fd.append('faction', faction);
+    fd.append('image', file);
+    try{
+      await api('/factions', { method:'POST', body: fd });
+      toast('Иконка добавлена: '+faction);
+      await loadFactionIcons();
+      renderConfigPanel();
+    }catch(e){ toast('Ошибка: '+e.message); }
+  });
+
+  document.querySelectorAll('.faction-replace-input').forEach(input=>{
+    input.addEventListener('change', async ()=>{
+      const file = input.files[0];
+      if(!file) return;
+      const fd = new FormData();
+      fd.append('image', file);
+      try{
+        await api('/factions/'+input.dataset.id+'/icon', { method:'POST', body: fd });
+        toast('Картинка обновлена');
+        await loadFactionIcons();
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
+    });
+  });
+
+  document.querySelectorAll('.faction-name-input').forEach(input=>{
+    input.addEventListener('blur', async ()=>{
+      const value = input.value.trim();
+      if(!value || value === input.dataset.prev) return;
+      try{
+        await api('/factions/'+input.dataset.id, { method:'PATCH', body:{ faction: value } });
+        toast('Переименовано: '+value);
+        await loadFactionIcons();
+        renderConfigPanel();
+      }catch(e){
+        toast('Ошибка: '+e.message);
+        input.value = input.dataset.prev; // откатываем на экране, раз не сохранилось
+      }
+    });
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter') input.blur(); });
+  });
+
+  document.querySelectorAll('.faction-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm('Убрать иконку фракции «'+btn.dataset.name+'»? Уже показанные на страницах островов иконки перестанут отображаться.')) return;
+      try{
+        await api('/factions/'+btn.dataset.id, { method:'DELETE' });
+        toast('Иконка фракции удалена');
+        await loadFactionIcons();
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
+    });
   });
 
   /* ---- данные: экспорт/импорт/бэкап ---- */

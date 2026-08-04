@@ -134,4 +134,64 @@ test.describe('Векторный слой рисования на карте', 
     expect(drawTool).toBeNull();
   });
 
+  test('инструмент "украшение": открывается пикер со стартовым набором картинок', async ({ page })=>{
+    await gotoReady(page);
+    await loginAndEnableEditor(page);
+    await expect(page.locator('#decoPicker')).toHaveClass(/hidden/);
+
+    await page.click('.draw-tool[data-tool="icon"]');
+    await expect(page.locator('#decoPicker')).not.toHaveClass(/hidden/);
+    // стартовый набор — 10 картинок (астрал/турель/обломки/аномалии и т.д.), не хардкод в JS, а из БД
+    await expect(page.locator('.deco-picker-item')).toHaveCount(10);
+  });
+
+  test('размещение украшения на карте кликом после выбора картинки', async ({ page })=>{
+    await gotoReady(page);
+    await loginAndEnableEditor(page);
+    const before = await page.evaluate(() => state.annotations.length);
+
+    await page.click('.draw-tool[data-tool="icon"]');
+    await page.click('.deco-picker-item >> nth=0');
+    await expect(page.locator('.deco-picker-item >> nth=0')).toHaveClass(/active/);
+
+    await page.click('#mapCanvas', { position: { x: 350, y: 250 } });
+    await page.waitForTimeout(400);
+
+    const after = await page.evaluate(() => state.annotations.length);
+    expect(after).toBe(before + 1);
+    await expect(page.locator('#annotLayer image.annot-icon')).toHaveCount(1);
+  });
+
+  test('без выбранной картинки клик по карте инструментом "украшение" ничего не создаёт', async ({ page })=>{
+    await gotoReady(page);
+    await loginAndEnableEditor(page);
+    const before = await page.evaluate(() => state.annotations.length);
+
+    await page.click('.draw-tool[data-tool="icon"]');
+    // картинку не выбираем — сразу кликаем по карте
+    await page.click('#mapCanvas', { position: { x: 600, y: 450 } });
+    await page.waitForTimeout(300);
+
+    const after = await page.evaluate(() => state.annotations.length);
+    expect(after).toBe(before);
+  });
+
+  test('инструмент "стереть" удаляет и размещённое украшение', async ({ page })=>{
+    await gotoReady(page);
+    await loginAndEnableEditor(page);
+
+    await page.click('.draw-tool[data-tool="icon"]');
+    await page.click('.deco-picker-item >> nth=0');
+    await page.click('#mapCanvas', { position: { x: 700, y: 500 } });
+    await page.waitForTimeout(300);
+    await expect(page.locator('#annotLayer image.annot-icon')).toHaveCount(1);
+
+    await page.click('.draw-tool[data-tool="erase"]');
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#annotLayer image.annot-icon').click();
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('#annotLayer image.annot-icon')).toHaveCount(0);
+  });
+
 });
