@@ -52,8 +52,13 @@ function createApp(){
   }));
 
   app.use(express.json({ limit: '5mb' }));
+  const sessionStore = new SqliteSessionStore();
+  sessionStore.on('error', (err)=>{
+    console.warn('Хранилище сессий: не удалось сохранить/обновить сессию —', err.message);
+  });
+
   app.use(session({
-    store: new SqliteSessionStore(),
+    store: sessionStore,
     secret: getSessionSecret(),
     resave: false,
     saveUninitialized: false,

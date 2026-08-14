@@ -1,6 +1,6 @@
 {
   "name": "atlas-allods-e2e",
-  "version": "0.1.0+v26w31-10",
+  "version": "0.1.0+v26w31-11",
   "private": true,
   "license": "MIT",
   "author": "Макар Терентьев (https://www.linkedin.com/in/tarentiev-makar/)",
@@ -8,7 +8,7 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "install-browsers": "playwright install chromium"
+    "install-browsers": "playwright install chromium webkit"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0"

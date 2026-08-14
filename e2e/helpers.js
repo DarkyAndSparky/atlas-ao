@@ -26,4 +26,27 @@ async function gotoReady(page, path='/'){
   await page.waitForFunction(() => typeof state !== 'undefined' && Array.isArray(state.data) && state.data.length > 0);
 }
 
-module.exports = { loginViaUI, enableEditor, loginAndEnableEditor, gotoReady, TEST_USERNAME, TEST_PASSWORD };
+// Пометки слоя рисования привязаны к state.project — переключаем на заведомо
+// несуществующий, уникальный на каждый тест проект: (а) там гарантированно
+// нет ни одного настоящего острова, значит клики при рисовании не могут
+// случайно попасть на маркер и отмениться; (б) пометки предыдущих тестов
+// физически не могут туда попасть, счётчики надёжны без ручной очистки.
+async function useIsolatedDrawingProject(page){
+  const project = 'e2e-drawing-' + Math.random().toString(36).slice(2);
+  await page.evaluate(async (project) => {
+    state.project = project;
+    await loadAnnotations();
+    renderMarkers();
+  }, project);
+  return project;
+}
+
+// renderConfigPanel() асинхронная (подгружает список редакторов/украшений/
+// иконок фракций перед отрисовкой) — просто клика по кнопке недостаточно,
+// нужно дождаться, что форма реально появилась в DOM.
+async function openConfig(page){
+  await page.click('#configBtn');
+  await page.locator('.config-card').first().waitFor({ state: 'visible' });
+}
+
+module.exports = { loginViaUI, enableEditor, loginAndEnableEditor, gotoReady, useIsolatedDrawingProject, openConfig, TEST_USERNAME, TEST_PASSWORD };

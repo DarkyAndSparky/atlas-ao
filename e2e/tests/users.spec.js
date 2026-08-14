@@ -24,7 +24,7 @@ test.describe('Управление редакторами (панель нас�
     await page.waitForTimeout(500);
 
     await expect(page.locator('.user-row')).toHaveCount(2);
-    await expect(page.locator('.user-row')).toContainText('e2e-second-editor');
+    await expect(page.locator('.user-row').filter({ hasText: 'e2e-second-editor' })).toHaveCount(1);
     // теперь редакторов двое — у обоих должна появиться кнопка удаления
     await expect(page.locator('.user-del')).toHaveCount(2);
 
@@ -48,13 +48,13 @@ test.describe('Управление редакторами (панель нас�
     await page.fill('#cfgNewPass', 'remove-me-pass1');
     await page.click('#cfgAddUserBtn');
     await page.waitForTimeout(500);
-    await expect(page.locator('.user-row')).toContainText('e2e-to-remove');
+    await expect(page.locator('.user-row').filter({ hasText: 'e2e-to-remove' })).toHaveCount(1);
 
     page.once('dialog', dialog => dialog.accept());
     await page.locator('.user-row', { hasText: 'e2e-to-remove' }).locator('.user-del').click();
     await page.waitForTimeout(500);
 
-    await expect(page.locator('.user-row')).not.toContainText('e2e-to-remove');
+    await expect(page.locator('.user-row').filter({ hasText: 'e2e-to-remove' })).toHaveCount(0);
 
     const status = await page.evaluate(async () => {
       const res = await fetch('/api/auth/login', {

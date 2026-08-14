@@ -73,8 +73,13 @@ test.describe('Глобальная карта', ()=>{
 
   test('возврат со страницы острова на карту "пингует" его маркер (регрессия по запросу)', async ({ page })=>{
     await gotoReady(page);
-    // берём заведомо размещённый остров
-    const id = await page.evaluate(() => state.data.find(a => a.mapX != null && a.mapY != null).id);
+    // берём заведомо размещённый остров; на всякий случай явно на "родном" проекте
+    const id = await page.evaluate(() => {
+      const item = state.data.find(a => a.project === 'Аллоды Онлайн' && a.mapX != null && a.mapY != null)
+        || state.data.find(a => a.mapX != null && a.mapY != null);
+      return item ? item.id : null;
+    });
+    test.skip(!id, 'в текущих данных нет ни одного размещённого острова — нечего пинговать');
     await page.evaluate((id) => openDetail(id), id);
     await page.evaluate(() => showMap());
 
@@ -91,9 +96,11 @@ test.describe('Глобальная карта', ()=>{
     await gotoReady(page);
     await page.click('[data-view="wiki"]');
     const id = await page.evaluate(() => {
-      const withCoords = state.data.find(a => a.mapX != null && a.mapY != null);
-      return withCoords.id;
+      const item = state.data.find(a => a.project === 'Аллоды Онлайн' && a.mapX != null && a.mapY != null)
+        || state.data.find(a => a.mapX != null && a.mapY != null);
+      return item ? item.id : null;
     });
+    test.skip(!id, 'в текущих данных нет ни одного размещённого острова — нечего пинговать');
     await page.evaluate((id) => openDetail(id), id);
     await page.click('[data-action="show-map"]'); // хлебная крошка "Атлас" на странице острова
 

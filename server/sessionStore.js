@@ -17,6 +17,19 @@ const db = require('./db');
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
+// POST /backup/restore намеренно закрывает общее соединение с БД прямо перед
+// ответом клиенту (см. routes/backup.js) — в этот момент express-session ещё
+// пытается сохранить/потрогать текущую сессию на финале того же response,
+// и любой запрос к этому стору неизбежно упадёт с "statement has been
+// finalized". Само по себе это безобидно: ответ клиенту уже готов, а через
+// мгновение процесс перезапустится и откроет базу (уже восстановленную)
+// заново. express-session при ошибке колбэка сам делает console.error —
+// поэтому просто ошибку не пробрасываем самостоятельно, а тихо коллбэчим
+// успех, если распознали именно этот сценарий.
+function isClosedDbError(e){
+  return e && /finalized|closed database/i.test(e.message || '');
+}
+
 class SqliteSessionStore extends session.Store {
   constructor(){
     super();
@@ -50,28 +63,28 @@ class SqliteSessionStore extends session.Store {
         return cb(null, null);
       }
       cb(null, JSON.parse(row.sess));
-    }catch(e){ cb(e); }
+    }catch(e){ isClosedDbError(e) ? cb(null, null) : cb(e); }
   }
 
   set(sid, sess, cb){
     try{
       this._upsert.run({ sid, sess: JSON.stringify(sess), expires: this._expiresOf(sess) });
       cb && cb(null);
-    }catch(e){ cb && cb(e); }
+    }catch(e){ cb && cb(isClosedDbError(e) ? null : e); }
   }
 
   destroy(sid, cb){
     try{
       this._destroy.run(sid);
       cb && cb(null);
-    }catch(e){ cb && cb(e); }
+    }catch(e){ cb && cb(isClosedDbError(e) ? null : e); }
   }
 
   touch(sid, sess, cb){
     try{
       this._touch.run(this._expiresOf(sess), sid);
       cb && cb(null);
-    }catch(e){ cb && cb(e); }
+    }catch(e){ cb && cb(isClosedDbError(e) ? null : e); }
   }
 }
 

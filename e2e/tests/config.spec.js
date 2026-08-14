@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, gotoReady } = require('../helpers');
+const { loginViaUI, gotoReady, openConfig } = require('../helpers');
 
 test.describe('Панель конфига (админ)', ()=>{
 
@@ -13,7 +13,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('открывается по клику и содержит все три карточки', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
     await expect(page.locator('#configView')).toHaveClass(/show/);
     await expect(page.locator('.config-card')).toHaveCount(8);
   });
@@ -21,7 +21,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('смена названия обновляет шапку и title вкладки', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     await page.fill('#cfgTitle', 'E2E Тест Атлас');
     await page.click('#cfgTitleSave');
@@ -38,7 +38,7 @@ test.describe('Панель конфига (админ)', ()=>{
     await page.emulateMedia({ colorScheme: 'dark' });
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     await page.evaluate(() => {
       const el = document.getElementById('cfgAccentDark');
@@ -55,7 +55,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('загрузка и удаление логотипа', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     await expect(page.locator('#cfgLogoPreview span')).toHaveText('Логотип не установлен');
 
@@ -89,7 +89,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('переключатель темы: светлая/тёмная/авто применяются и сохраняются', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     // выбираем тёмную явно
     await page.click('[data-theme-choice="dark"]');
@@ -112,7 +112,7 @@ test.describe('Панель конфига (админ)', ()=>{
     expect(attr).toBe('light');
 
     // возврат к авто убирает атрибут и запись в localStorage
-    await page.click('#configBtn');
+    await openConfig(page);
     await page.click('[data-theme-choice="auto"]');
     await page.waitForTimeout(200);
     attr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
@@ -135,7 +135,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('панель настроек: стартовый набор украшений виден и в него можно добавить своё', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     await expect(page.locator('.deco-manage-item')).toHaveCount(10);
 
@@ -157,7 +157,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('панель настроек: удаление украшения убирает его из списка', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     await page.fill('#cfgNewDecoName', 'E2E Удалю Меня');
     await page.setInputFiles('#cfgNewDecoFile', {
@@ -181,7 +181,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('панель настроек: стартовый набор иконок фракций виден и в него можно добавить свою', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     await expect(page.locator('.faction-manage-item')).toHaveCount(8);
 
@@ -202,7 +202,7 @@ test.describe('Панель конфига (админ)', ()=>{
   test('панель настроек: переименование иконки фракции сохраняется', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
     const input = page.locator('.faction-name-input').first();
     const oldValue = await input.inputValue();
@@ -217,12 +217,12 @@ test.describe('Панель конфига (админ)', ()=>{
   test('панель настроек: удаление иконки фракции убирает её из списка', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
-    await page.click('#configBtn');
+    await openConfig(page);
 
+    await expect(page.locator('.faction-manage-item').first()).toBeVisible();
     const before = await page.locator('.faction-manage-item').count();
     page.once('dialog', dialog => dialog.accept());
     await page.locator('.faction-del').first().click();
-    await page.waitForTimeout(500);
 
     await expect(page.locator('.faction-manage-item')).toHaveCount(before - 1);
   });
