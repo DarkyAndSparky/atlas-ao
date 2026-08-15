@@ -12,6 +12,7 @@ const settingsRouter = require('./routes/settings');
 const annotationsRouter = require('./routes/annotations');
 const decorationsRouter = require('./routes/decorations');
 const factionsRouter = require('./routes/factions');
+const { router: systemRouter } = require('./routes/system');
 const { UPLOAD_DIR } = require('./upload');
 
 require('./db'); // инициализирует (и при первом запуске засеивает) базу до старта сервера
@@ -26,7 +27,7 @@ function createApp(){
 
   const cspDirectives = {
     ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-    'img-src': ["'self'", 'data:', 'blob:'],
+    'img-src': ["'self'", 'data:', 'blob:', 'https:'],
     'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
     'font-src': ["'self'", 'https://fonts.gstatic.com'],
     // Фронтенд больше не использует inline onclick="..." (см. delegated click
@@ -81,6 +82,7 @@ function createApp(){
   app.use('/api', annotationsRouter);
   app.use('/api', decorationsRouter);
   app.use('/api', factionsRouter);
+  app.use('/api/system', systemRouter);
 
   app.use('/uploads', express.static(UPLOAD_DIR));
   app.use(express.static(path.join(__dirname, '..', 'public')));

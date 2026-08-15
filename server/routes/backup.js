@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const { requireAuth } = require('./auth');
+const { requireAdmin } = require('./auth');
 
 const DB_PATH = process.env.ATLAS_DB_PATH || path.join(__dirname, '..', 'atlas.db');
 const BACKUPS_DIR = process.env.ATLAS_BACKUPS_DIR || path.join(__dirname, '..', '..', 'backups');
@@ -11,7 +11,7 @@ if(!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 const router = express.Router();
 
 // скачать текущий файл базы целиком — требует входа, т.к. внутри лежит и хэш пароля
-router.get('/download', requireAuth, (req, res)=>{
+router.get('/download', requireAdmin, (req, res)=>{
   if(!fs.existsSync(DB_PATH)) return res.status(404).json({ error: 'Файл базы не найден' });
   try{
     // база работает в режиме WAL: часть свежих записей может ещё лежать в
@@ -31,7 +31,7 @@ router.get('/download', requireAuth, (req, res)=>{
 const memStorage = multer.memoryStorage();
 const uploadDb = multer({ storage: memStorage, limits: { fileSize: 200*1024*1024 } });
 
-router.post('/restore', requireAuth, uploadDb.single('database'), (req, res)=>{
+router.post('/restore', requireAdmin, uploadDb.single('database'), (req, res)=>{
   if(!req.file) return res.status(400).json({ error: 'Файл не получен' });
   const header = req.file.buffer.slice(0, 16).toString('utf-8');
   if(!header.startsWith('SQLite format 3')){

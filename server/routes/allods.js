@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
-const { requireAuth } = require('./auth');
+const { requireAuth, requireAdmin } = require('./auth');
 const { upload, verifyUploadedImage, sanitizeUploadedSvg, compressUploadedImage, deleteUploadedFile } = require('../upload');
 
 const router = express.Router();
@@ -214,7 +214,10 @@ router.get('/export', (req, res)=>{
   res.json(rows);
 });
 
-router.post('/import', requireAuth, (req, res)=>{
+// Импорт — деструктивная операция: полностью заменяет allods/locations/gallery
+// (см. комментарий ниже), поэтому только для администратора, как восстановление
+// из бэкапа.
+router.post('/import', requireAdmin, (req, res)=>{
   const rows = req.body;
   if(!Array.isArray(rows)) return res.status(400).json({ error: 'Ожидался массив аллодов' });
 

@@ -7,22 +7,29 @@ const amPass = document.getElementById('amPass');
 const amPass2 = document.getElementById('amPass2');
 const amErr = document.getElementById('amErr');
 let authMode = 'login'; // 'login' | 'create' (create = самый первый бутстрап-аккаунт на сервере)
-let authStatus = { hasAccount:false, loggedIn:false, username:null };
+let authStatus = { hasAccount:false, loggedIn:false, username:null, role:null };
 
 async function updateAuthUI(){
   try{ authStatus = await api('/auth/status'); }catch(e){ /* сервер может быть ещё недоступен */ }
   const btn = document.getElementById('authBtn');
   const editorBtn = document.getElementById('editorToggle');
   const configBtn = document.getElementById('configBtn');
+  const aboutBtn = document.getElementById('aboutBtn');
+  const isAdmin = authStatus.loggedIn && authStatus.role === 'admin';
   if(authStatus.loggedIn){
-    btn.textContent = 'Выйти (' + authStatus.username + ')';
+    const roleLabel = authStatus.role === 'admin' ? 'админ' : 'редактор';
+    btn.textContent = `Выйти (${authStatus.username} · ${roleLabel})`;
     btn.classList.add('logged-in');
     editorBtn.title = '';
-    if(configBtn) configBtn.style.display = 'inline-block';
+    // «Настройки» и «О системе» — только администратору (управление
+    // пользователями, бэкапы, конфигурация сайта, диагностика окружения)
+    if(configBtn) configBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    if(aboutBtn) aboutBtn.style.display = isAdmin ? 'inline-block' : 'none';
   }else{
     btn.textContent = 'Войти';
     btn.classList.remove('logged-in');
     if(configBtn) configBtn.style.display = 'none';
+    if(aboutBtn) aboutBtn.style.display = 'none';
     if(state.view === 'config') showMap();
     if(state.editorOn){
       state.editorOn = false;
@@ -37,6 +44,7 @@ async function updateAuthUI(){
 }
 document.getElementById('configBtn').addEventListener('click', ()=>{
   if(!authStatus.loggedIn){ openAuth(); return; }
+  if(authStatus.role !== 'admin'){ toast('Настройки доступны только администратору.'); return; }
   showConfig();
 });
 

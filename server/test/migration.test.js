@@ -65,6 +65,7 @@ async function post(path, body){
 test('старый аккаунт мигрирует в users под именем admin с тем же паролем', async ()=>{
   const login = await post('/api/auth/login', { username: 'admin', password: LEGACY_PASSWORD });
   assert.equal(login.status, 200);
+  assert.equal(login.data.user.role, 'admin');
 });
 
 test('старая таблица auth больше не используется (строка удалена после миграции)', ()=>{

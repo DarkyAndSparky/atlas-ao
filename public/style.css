@@ -349,9 +349,11 @@ body.editor-on #drawToolbar{display:flex;}
 .draw-color.active{border-color:var(--parchment);}
 #mapView.drawing{cursor:crosshair;}
 #annotLayer{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
-.annot-el{pointer-events:auto;}
+.annot-el{pointer-events:all;}
 .annot-text{font-family:var(--ui);user-select:none;}
 #mapView.drawing .annot-el{cursor:pointer;}
+#mapView:not(.drawing) .annot-el{cursor:move;}
+.annot-el.dragging{opacity:0.7;}
 .annot-preview{pointer-events:none;opacity:0.85;stroke-dasharray:4 3;}
 .annot-icon{pointer-events:auto;}
 
@@ -697,6 +699,10 @@ body.editor-on #drawToolbar{display:flex;}
 }
 .user-name{font-family:var(--body);font-size:14px;flex:1;}
 .user-name em{color:var(--parchment-dim);font-style:normal;font-size:12px;}
+.user-role-badge{font-family:var(--ui);font-size:10px;text-transform:uppercase;letter-spacing:0.4px;
+  padding:2px 7px;border-radius:3px;white-space:nowrap;}
+.user-role-admin{color:var(--gold-bright);background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);}
+.user-role-editor{color:var(--parchment-dim);background:rgba(255,255,255,0.05);border:1px solid var(--line);}
 .user-date{font-family:var(--ui);font-size:11px;color:var(--parchment-dim);}
 .user-del{font-size:11.5px;padding:6px 12px;}
 
@@ -774,10 +780,53 @@ body.editor-on #drawToolbar{display:flex;}
 }
 #aboutOverlay.show{display:flex;}
 #aboutModal{
-  width:420px;max-width:92vw;background:var(--void-1);border:1px solid var(--gold);border-radius:4px;
+  width:520px;max-width:92vw;background:var(--void-1);border:1px solid var(--gold);border-radius:4px;
   padding:26px 26px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);
   max-height:85vh;overflow-y:auto;
 }
+.about-section{margin-bottom:18px;}
+.about-section-title{
+  font-family:var(--ui);font-size:11px;text-transform:uppercase;letter-spacing:0.8px;
+  color:var(--gold-bright);margin-bottom:8px;opacity:0.9;
+}
+.about-tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;}
+.about-tech-item{display:flex;gap:8px;align-items:flex-start;}
+.about-tech-icon{font-size:14px;line-height:1.4;}
+.about-tech-name{font-family:var(--ui);font-size:12px;color:var(--parchment);font-weight:600;}
+.about-tech-desc{font-family:var(--ui);font-size:10.5px;color:var(--parchment-dim);line-height:1.4;}
+.about-deps-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+.about-check-btn{
+  font-family:var(--ui);font-size:10.5px;background:var(--void-0);border:1px solid var(--line);
+  color:var(--parchment);border-radius:3px;padding:5px 9px;cursor:pointer;white-space:nowrap;
+  transition:border-color .15s ease;
+}
+.about-check-btn:hover{border-color:var(--gold);}
+.about-check-btn:disabled{opacity:0.5;cursor:default;}
+.about-deps-status{font-family:var(--ui);font-size:10.5px;color:var(--parchment-dim);margin-bottom:8px;min-height:14px;}
+.about-deps-status.error{color:var(--imperial);}
+.about-deps-table{font-family:'SF Mono', Consolas, monospace;font-size:11px;}
+.about-changelog-entry{margin-bottom:12px;}
+.about-changelog-entry:last-child{margin-bottom:0;}
+.about-changelog-head{display:flex;align-items:baseline;gap:8px;margin-bottom:5px;}
+.about-changelog-version{font-family:var(--ui);font-size:11.5px;font-weight:700;color:var(--gold-bright);}
+.about-changelog-date{font-family:var(--ui);font-size:10.5px;color:var(--parchment-dim);}
+.about-changelog-items{margin:0;padding-left:16px;}
+.about-changelog-items li{font-family:var(--ui);font-size:11px;color:var(--parchment-dim);line-height:1.5;margin-bottom:3px;}
+.about-changelog-empty{font-family:var(--ui);font-size:11px;color:var(--parchment-dim);opacity:0.7;}
+.about-deps-row{
+  display:flex;justify-content:space-between;gap:10px;padding:6px 0;
+  border-top:1px solid var(--line);color:var(--parchment-dim);
+}
+.about-deps-row:first-child{border-top:none;}
+.about-deps-row b{color:var(--parchment);font-weight:600;}
+.about-deps-row .dep-ok{color:var(--astral);}
+.about-deps-row .dep-outdated{color:var(--imperial);}
+.about-license-btn{
+  display:inline-block;font-family:var(--ui);font-size:11.5px;color:var(--void-0);
+  background:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:8px 12px;
+  text-decoration:none;cursor:pointer;
+}
+.about-license-btn:hover{background:var(--gold-bright);}
 .about-title{
   font-family:var(--display);font-size:19px;color:var(--gold-bright);letter-spacing:1px;margin-bottom:16px;
 }

@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAuth } = require('./auth');
+const { requireAdmin } = require('./auth');
 const { upload, verifyUploadedImage, sanitizeUploadedSvg, compressUploadedImage, deleteUploadedFile } = require('../upload');
 
 const router = express.Router();
@@ -16,7 +16,7 @@ router.get('/', (req, res)=>{
   res.json(getSettings());
 });
 
-router.patch('/', requireAuth, (req, res)=>{
+router.patch('/', requireAdmin, (req, res)=>{
   const updates = {};
   if('title' in req.body){
     const title = (req.body.title || '').toString().trim();
@@ -39,7 +39,7 @@ router.patch('/', requireAuth, (req, res)=>{
   res.json(getSettings());
 });
 
-router.post('/logo', requireAuth, upload.single('logo'), verifyUploadedImage, sanitizeUploadedSvg, compressUploadedImage, (req, res)=>{
+router.post('/logo', requireAdmin, upload.single('logo'), verifyUploadedImage, sanitizeUploadedSvg, compressUploadedImage, (req, res)=>{
   if(!req.file) return res.status(400).json({ error: 'Файл не получен' });
   const current = getSettings();
   if(current.logo_url) deleteUploadedFile(current.logo_url);
@@ -48,7 +48,7 @@ router.post('/logo', requireAuth, upload.single('logo'), verifyUploadedImage, sa
   res.json(getSettings());
 });
 
-router.delete('/logo', requireAuth, (req, res)=>{
+router.delete('/logo', requireAdmin, (req, res)=>{
   const current = getSettings();
   if(current.logo_url) deleteUploadedFile(current.logo_url);
   db.prepare('UPDATE site_settings SET logo_url=NULL WHERE id=1').run();

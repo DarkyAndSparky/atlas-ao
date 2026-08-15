@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pre-commit хук Атласа Аллодов.
+# Ставится автоматически при `npm install` в server/ (см. package.json ->
+# "prepare" -> ../scripts/install-hooks.js). Не блокирует коммит намертво —
+# только напоминает и просит подтверждения.
+#
+# Логика: если в коммите меняются файлы в server/ или public/js/ или
+# public/*.html (реальная функциональность), но CHANGELOG.md в этом же
+# коммите не тронут — просим подтверждения. "n" — коммит отменяется, идёшь
+# дописывать запись в CHANGELOG.md. "y" — коммит проходит как есть
+# (например, чисто рефакторинг без видимого пользователю эффекта).
+
+staged=$(git diff --cached --name-only)
+
+touches_code=$(echo "$staged" | grep -E '^(server/|public/js/|public/.*\.html)' | grep -v -E '^(server/routes/system\.js|server/test/)')
+touches_changelog=$(echo "$staged" | grep -E '^CHANGELOG\.md$')
+
+if [ -n "$touches_code" ] && [ -z "$touches_changelog" ]; then
+  echo ""
+  echo "ВНИМАНИЕ: В коммите есть изменения в коде, но CHANGELOG.md не тронут:"
+  echo "$touches_code" | sed 's/^/    /'
+  echo ""
+  if [ ! -t 1 ]; then
+    echo "    (не интерактивный терминал — коммит пропущен без подтверждения)"
+    exit 0
+  fi
+  read -p "Продолжить коммит без записи в CHANGELOG.md? [y/N] " answer < /dev/tty
+  case "$answer" in
+    [Yy]*) exit 0 ;;
+    *) echo "Коммит отменён — допиши запись в CHANGELOG.md."; exit 1 ;;
+  esac
+fi
+
+exit 0

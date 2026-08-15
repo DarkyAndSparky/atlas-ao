@@ -6,9 +6,15 @@ FROM node:22-slim AS deps
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
 # npm ci вместо install: детерминированная установка строго по lock-файлу.
+# --ignore-scripts: в этой стадии копируется только package*.json (без
+# scripts/), а lifecycle-скрипт "prepare" (git-хуки) ссылается на файл из
+# scripts/ — без этого флага npm ci упал бы, не найдя его. Ни у одной из
+# наших зависимостей нет своих install/postinstall-скриптов (sharp тянет
+# платформенный бинарник через optionalDependencies, не postinstall), так
+# что пропуск скриптов тут ничего не ломает.
 # sharp скачивает нативный биндинг под платформу сборки — на Debian slim (glibc) это
 # работает "из коробки", в отличие от alpine (musl), поэтому базовый образ не alpine.
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # --- runtime -------------------------------------------------------------------------
 FROM node:22-slim AS runtime
@@ -21,6 +27,7 @@ RUN groupadd --system atlas && useradd --system --gid atlas --home /app atlas
 COPY --from=deps /app/server/node_modules ./server/node_modules
 COPY server ./server
 COPY public ./public
+COPY VERSION CHANGELOG.md ./
 
 # том для базы/загрузок/бэкапов монтируется поверх этого — на всякий случай создаём
 # структуру заранее с нужным владельцем, иначе первый старт под non-root её не создаст

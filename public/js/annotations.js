@@ -149,6 +149,73 @@ annotLayer.addEventListener('click', async ev=>{
   }catch(e){ toast('Ошибка: '+e.message); }
 });
 
+/* ---------------- перетаскивание уже размещённых фигур (режим без инструмента) ---------------- */
+let dragging = null; // { id, startWorld, origAttrs }
+
+function annotationById(id){
+  return state.annotations.find(a=>a.id===id);
+}
+
+function applyOffsetToEl(el, a, dx, dy){
+  if(a.type==='text' || a.type==='circle' || a.type==='icon'){
+    const x = a.x1+dx, y = a.y1+dy;
+    if(a.type==='text'){ el.setAttribute('x', x); el.setAttribute('y', y); }
+    else if(a.type==='circle'){ el.setAttribute('cx', x); el.setAttribute('cy', y); }
+    else{ // icon
+      const size = (a.r||32)*2;
+      el.setAttribute('x', x - size/2); el.setAttribute('y', y - size/2);
+    }
+  }else if(a.type==='line'){
+    el.setAttribute('x1', a.x1+dx); el.setAttribute('y1', a.y1+dy);
+    el.setAttribute('x2', a.x2+dx); el.setAttribute('y2', a.y2+dy);
+  }else if(a.type==='rect'){
+    el.setAttribute('x', Math.min(a.x1,a.x2)+dx); el.setAttribute('y', Math.min(a.y1,a.y2)+dy);
+  }
+}
+
+annotLayer.addEventListener('mousedown', ev=>{
+  if(!state.editorOn || state.drawTool) return; // инструмент рисования/стирания активен — не двигаем
+  const el = ev.target.closest('.annot-el');
+  if(!el || !el.dataset.id) return;
+  const a = annotationById(el.dataset.id);
+  if(!a) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const startWorld = worldPoint(ev.clientX, ev.clientY);
+  el.classList.add('dragging');
+  dragging = { id: a.id, el, a, startWorld, moved:false };
+});
+
+window.addEventListener('mousemove', ev=>{
+  if(!dragging) return;
+  const p = worldPoint(ev.clientX, ev.clientY);
+  const dx = p.x - dragging.startWorld.x, dy = p.y - dragging.startWorld.y;
+  if(Math.abs(dx)>2 || Math.abs(dy)>2) dragging.moved = true;
+  applyOffsetToEl(dragging.el, dragging.a, dx, dy);
+  dragging.lastDx = dx; dragging.lastDy = dy;
+});
+
+window.addEventListener('mouseup', async ev=>{
+  if(!dragging) return;
+  const d = dragging; dragging = null;
+  d.el.classList.remove('dragging');
+  if(!d.moved) return; // просто клик — ничего не двигали
+
+  const dx = d.lastDx||0, dy = d.lastDy||0;
+  const patch = { x1: d.a.x1+dx, y1: d.a.y1+dy };
+  if(d.a.type==='line' || d.a.type==='rect'){ patch.x2 = d.a.x2+dx; patch.y2 = d.a.y2+dy; }
+
+  try{
+    const updated = await api('/annotations/'+d.id, { method:'PATCH', body: patch });
+    const idx = state.annotations.findIndex(a=>a.id===d.id);
+    if(idx>=0) state.annotations[idx] = updated;
+    renderAnnotations();
+  }catch(e){
+    toast('Не удалось переместить: '+e.message);
+    renderAnnotations(); // откатываем визуально к последним сохранённым координатам
+  }
+});
+
 /* ---------------- рисование мышью/пальцем ---------------- */
 function worldPoint(clientX, clientY){
   const rect = mapView.getBoundingClientRect();

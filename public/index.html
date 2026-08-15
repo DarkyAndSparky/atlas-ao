@@ -129,7 +129,7 @@
   <div id="legalFooter">
     <span class="legal-text">Неофициальный фан-проект. Не связан с ASTRUM ENTERTAINMENT / ASTRUM LAB LLC и не претендует на официальность или точность — сведения собраны энтузиастами и могут быть неполными, устаревшими или содержать ошибки.</span>
     <span class="legal-copy">© 2026 ASTRUM LAB LLC. Все права защищены.</span>
-    <button id="aboutBtn" type="button">ℹ️ О системе</button>
+    <button id="aboutBtn" type="button" style="display:none;">ℹ️ О системе</button>
   </div>
 
   <div id="aboutOverlay">
@@ -143,7 +143,7 @@
       <div class="about-health" id="aboutHealthResult"></div>
 
       <div class="about-rows">
-        <div class="about-row"><span>Версия</span><b>v26w31-11</b></div>
+        <div class="about-row"><span>Версия</span><b id="aboutVersion">—</b></div>
         <div class="about-row"><span>Аллодов в базе</span><b id="aboutCount">—</b></div>
         <div class="about-row"><span>БД</span><b><code>server/atlas.db</code> (node:sqlite)</b></div>
         <div class="about-row"><span>Сервер</span><b>Node.js + Express</b></div>
@@ -151,6 +151,41 @@
       </div>
 
       <p class="about-desc">Атлас Аллодов — самостоятельный сайт-энциклопедия аллодов (островов) вселенной Allods Online: глобальная карта, страницы островов с историей и галереей, встроенный редактор для наполнения.</p>
+
+      <div class="about-section" id="aboutEnvSection">
+        <div class="about-section-title">Окружение</div>
+        <div class="about-rows" id="aboutEnvRows"></div>
+      </div>
+
+      <div class="about-section" id="aboutTechSection">
+        <div class="about-section-title">Технологии</div>
+        <div class="about-tech-grid" id="aboutTechGrid"></div>
+      </div>
+
+      <div class="about-section" id="aboutDepsSection">
+        <div class="about-deps-header">
+          <div class="about-section-title" style="margin:0;">Зависимости</div>
+          <button id="aboutCheckUpdatesBtn" type="button" class="about-check-btn">🔄 Проверить обновления</button>
+        </div>
+        <div class="about-deps-status" id="aboutDepsStatus"></div>
+        <div class="about-deps-table" id="aboutDepsTable"></div>
+      </div>
+
+      <div class="about-section" id="aboutChangelogSection">
+        <div class="about-section-title">Последние изменения</div>
+        <div class="about-changelog" id="aboutChangelog"></div>
+      </div>
+
+      <div class="about-section">
+        <div class="about-section-title">Лицензия</div>
+        <p class="about-desc" style="margin-bottom:10px;">
+          Лицензия <b>MIT</b> распространяется только на исходный код проекта.
+          Все ресурсы вселенной Allods Online (название, арты, скриншоты и другой
+          игровой контент) принадлежат их правообладателю — ASTRUM ENTERTAINMENT /
+          ASTRUM LAB LLC — и лицензией MIT не покрываются.
+        </p>
+        <a id="aboutLicenseDownload" class="about-license-btn" href="/api/system/license" download>⬇️ Скачать лицензию (.txt)</a>
+      </div>
 
       <p class="about-legal">
         Это неофициальный, некоммерческий фан-проект. Он не разработан и не поддерживается

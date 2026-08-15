@@ -12,7 +12,7 @@ doc
 .git
 .github
 *.md
-CHANGELOG.md
+!CHANGELOG.md
 install.sh
 install.bat
 start.sh

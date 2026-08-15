@@ -195,23 +195,31 @@ async function renderConfigPanel(){
       </div>
 
       <div class="config-card config-card-wide">
-        <h3>👤 Редакторы</h3>
-        <p class="config-hint">Все перечисленные аккаунты имеют одинаковые права редактирования.
-        Нельзя удалить последнего оставшегося — если понадобится сбросить всех,
-        это делается на сервере командой <code>npm run reset-password</code>.</p>
+        <h3>👤 Пользователи</h3>
+        <p class="config-hint"><b>Администратор</b> — полный доступ: настройки сайта, бэкапы,
+        пользователи, «О системе». <b>Редактор</b> — может править контент (острова, локации,
+        галерею, карту, фракции, украшения), но не видит эту панель и не может управлять
+        пользователями/бэкапами. Нельзя удалить последнего оставшегося пользователя и последнего
+        оставшегося администратора — если понадобится сбросить всех, это делается на сервере
+        командой <code>npm run reset-password</code>.</p>
         <div class="users-list" id="usersList">
           ${users.map(u=>`
             <div class="user-row">
               <span class="user-name">${escapeHtml(u.username)}${u.username===authStatus.username ? ' <em>(вы)</em>' : ''}</span>
+              <span class="user-role-badge user-role-${u.role}">${u.role==='admin' ? 'администратор' : 'редактор'}</span>
               <span class="user-date">с ${new Date(u.createdAt).toLocaleDateString('ru-RU')}</span>
               ${users.length>1 ? `<button class="btn user-del" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}">Удалить</button>` : ''}
             </div>`).join('')}
         </div>
 
-        <h4 class="config-subhead">Добавить редактора</h4>
+        <h4 class="config-subhead">Добавить пользователя</h4>
         <div class="config-actions">
           <input type="text" id="cfgNewUser" class="config-input" placeholder="Имя пользователя" style="max-width:220px;">
           <input type="password" id="cfgNewPass" class="config-input" placeholder="Пароль (от 8 символов)" style="max-width:220px;">
+          <select id="cfgNewRole" class="config-input" style="max-width:160px;">
+            <option value="editor" selected>Редактор</option>
+            <option value="admin">Администратор</option>
+          </select>
           <button class="btn" id="cfgAddUserBtn">Добавить</button>
         </div>
 
@@ -350,10 +358,11 @@ async function renderConfigPanel(){
   document.getElementById('cfgAddUserBtn').addEventListener('click', async ()=>{
     const username = document.getElementById('cfgNewUser').value.trim();
     const password = document.getElementById('cfgNewPass').value;
+    const role = document.getElementById('cfgNewRole').value;
     if(!username || !password) return toast('Укажите имя пользователя и пароль');
     try{
-      await api('/auth/register', { method:'POST', body:{ username, password } });
-      toast('Редактор добавлен: '+username);
+      await api('/auth/register', { method:'POST', body:{ username, password, role } });
+      toast('Пользователь добавлен: '+username);
       renderConfigPanel();
     }catch(e){ toast('Ошибка: '+e.message); }
   });
@@ -365,10 +374,10 @@ async function renderConfigPanel(){
       const isSelf = name === authStatus.username;
       if(!confirm(isSelf
         ? 'Удалить собственный аккаунт "'+name+'"? Вы сразу выйдете из системы.'
-        : 'Удалить редактора "'+name+'"? Отменить это будет нельзя.')) return;
+        : 'Удалить пользователя "'+name+'"? Отменить это будет нельзя.')) return;
       try{
         const result = await api('/auth/users/'+id, { method:'DELETE' });
-        toast('Редактор удалён: '+name);
+        toast('Пользователь удалён: '+name);
         if(result.selfDeleted){ await updateAuthUI(); showMap(); }
         else renderConfigPanel();
       }catch(e){ toast('Ошибка: '+e.message); }

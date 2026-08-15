@@ -1,22 +1,24 @@
 {
   "name": "atlas-allods-server",
-  "version": "0.1.0+v26w31-11",
+  "version": "0.1.0+v26w31-12",
   "description": "Локальный сервер Атласа Аллодов: SQLite + Express",
   "main": "server.js",
   "license": "MIT",
   "author": "Макар Терентьев (https://www.linkedin.com/in/tarentiev-makar/)",
   "repository": {
     "type": "git",
-    "url": "REPLACE_WITH_YOUR_GITHUB_REPO_URL"
+    "url": "https://github.com/DarkyAndSparky/atlas-ao.git"
   },
   "scripts": {
     "start": "node server.js",
     "backup": "node scripts/backup.js",
     "reset-password": "node scripts/reset-password.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "version:sync": "node scripts/sync-version.js",
+    "prepare": "node scripts/install-hooks.js"
   },
   "dependencies": {
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "helmet": "^8.3.0",

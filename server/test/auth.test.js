@@ -55,6 +55,7 @@ function makeClient(){
   return {
     get: p=>request('GET',p),
     post: (p,b)=>request('POST',p,b),
+    patch: (p,b)=>request('PATCH',p,b),
     del: p=>request('DELETE',p),
   };
 }
@@ -258,15 +259,15 @@ test('удалить последнего оставшегося редакто�
   assert.equal(usersAfter.data.length, 1, 'единственный оставшийся аккаунт должен уцелеть');
 });
 
-test('удаление собственного аккаунта сразу разлогинивает клиента', async ()=>{
+test('удаление собственного аккаунта сразу разлогинивает клиента (админ)', async ()=>{
   const c = makeClient();
   await c.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
-  await c.post('/api/auth/register', { username: 'self-deleter', password: 'goawaypass1' });
+  await c.post('/api/auth/register', { username: 'self-deleter-admin', password: 'goawaypass1', role: 'admin' });
 
   const c2 = makeClient();
-  await c2.post('/api/auth/login', { username: 'self-deleter', password: 'goawaypass1' });
+  await c2.post('/api/auth/login', { username: 'self-deleter-admin', password: 'goawaypass1' });
   const users = await c2.get('/api/auth/users');
-  const me = users.data.find(u=>u.username==='self-deleter');
+  const me = users.data.find(u=>u.username==='self-deleter-admin');
 
   const del = await c2.del('/api/auth/users/'+me.id);
   assert.equal(del.status, 200);
@@ -274,6 +275,51 @@ test('удаление собственного аккаунта сразу ра
 
   const status = await c2.get('/api/auth/status');
   assert.equal(status.data.loggedIn, false);
+});
+
+test('роли: приглашённый без явной роли становится editor, а не admin', async ()=>{
+  const c = makeClient();
+  await c.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
+  const reg = await c.post('/api/auth/register', { username: 'plain-editor', password: 'goawaypass1' });
+  assert.equal(reg.data.user.role, 'editor');
+});
+
+test('роли: editor не может смотреть /users, удалять аккаунты, чужие настройки/бэкапы/О системе', async ()=>{
+  const admin = makeClient();
+  await admin.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
+  await admin.post('/api/auth/register', { username: 'limited-editor', password: 'goawaypass1', role: 'editor' });
+
+  const editor = makeClient();
+  await editor.post('/api/auth/login', { username: 'limited-editor', password: 'goawaypass1' });
+
+  assert.equal((await editor.get('/api/auth/users')).status, 403);
+  assert.equal((await editor.del('/api/auth/users/1')).status, 403);
+  assert.equal((await editor.patch('/api/settings', { title: 'Взлом' })).status, 403);
+  assert.equal((await editor.get('/api/backup/download')).status, 403);
+  assert.equal((await editor.get('/api/system')).status, 403);
+  // но контент редактировать по-прежнему можно
+  assert.equal((await editor.post('/api/allods', { id:'edtest', name:'Тест роли' })).status, 200);
+});
+
+test('роли: editor не может приглашать новых пользователей — только admin', async ()=>{
+  const admin = makeClient();
+  await admin.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
+  await admin.post('/api/auth/register', { username: 'inviter-editor', password: 'goawaypass1', role: 'editor' });
+
+  const editor = makeClient();
+  await editor.post('/api/auth/login', { username: 'inviter-editor', password: 'goawaypass1' });
+  const attempt = await editor.post('/api/auth/register', { username: 'should-not-exist', password: 'goawaypass1' });
+  assert.equal(attempt.status, 403);
+});
+
+test('роли: нельзя удалить последнего оставшегося admin, даже если editor-аккаунты ещё есть', async ()=>{
+  const c = makeClient();
+  await c.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
+  const users = await c.get('/api/auth/users');
+  const onlyAdmin = users.data.find(u=>u.username==='atlant');
+  const del = await c.del('/api/auth/users/'+onlyAdmin.id);
+  assert.equal(del.status, 400);
+  assert.match(del.data.error, /последнего оставшегося администратора/);
 });
 
 test('rate-limit: после 5 неверных попыток 6-я даёт 429, а не 401', async ()=>{

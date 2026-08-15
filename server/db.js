@@ -85,12 +85,15 @@ CREATE TABLE IF NOT EXISTS auth (
 );
 
 -- многопользовательские аккаунты редакторов (см. миграцию из auth ниже) —
--- все редакторы равноправны, отдельной роли "администратор" нет
+-- роль хранится в отдельной колонке (см. миграцию role ниже), в CREATE TABLE
+-- сразу для новых баз с дефолтом 'admin' — первый аккаунт на сервере
+-- всегда полноправный (см. bootstrap-ветку в routes/auth.js)
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE COLLATE NOCASE,
   salt TEXT NOT NULL,
   hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('editor','admin')),
   created_at INTEGER NOT NULL
 );
 
@@ -203,6 +206,16 @@ if(legacyAuth && !hasAnyUser){
   db.prepare('INSERT INTO users (username, salt, hash, created_at) VALUES (?,?,?,?)')
     .run('admin', legacyAuth.salt, legacyAuth.hash, Date.now());
   db.prepare('DELETE FROM auth WHERE id=1').run();
+}
+
+// миграция: базы до введения ролей — все существующие аккаунты становятся
+// 'admin' (сохраняем текущий уровень доступа, никого не понижаем молча);
+// новые аккаунты, приглашённые уже ПОСЛЕ этой миграции, получают 'editor' по
+// умолчанию в routes/auth.js, если админ явно не укажет роль 'admin'
+const userCols = db.prepare("PRAGMA table_info(users)").all().map(c=>c.name);
+if(userCols.length && !userCols.includes('role')){
+  console.log('Миграция: добавляю роли редакторов (существующие аккаунты становятся admin)...');
+  db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'");
 }
 
 // миграция: старые базы уже содержали map_annotations со CHECK-ограничением
