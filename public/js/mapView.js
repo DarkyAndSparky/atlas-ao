@@ -182,7 +182,27 @@ function renderTray(){
   });
   // панель нужна только поверх карты — на странице острова/локации она бы перекрывала контент
   trayEl.classList.toggle('show', state.editorOn && state.view==='map');
+  updateDrawToolbarVisibility();
 }
+
+// Единая точка правды для видимости панели рисования: кнопка-переключатель
+// показывается в режиме редактора на карте, сама панель — только если ещё и
+// явно открыта через неё (state.drawPanelOpen), это отдельный переключатель,
+// не завязанный жёстко на editorOn — чтобы не мешать украшать карту, если
+// сейчас просто расставляешь острова.
+function updateDrawToolbarVisibility(){
+  const onMapInEditor = state.editorOn && state.view==='map';
+  const toggleBtn = document.getElementById('drawToggleBtn');
+  const toolbar = document.getElementById('drawToolbar');
+  toggleBtn.classList.toggle('show', onMapInEditor);
+  toggleBtn.classList.toggle('active', onMapInEditor && state.drawPanelOpen);
+  toolbar.classList.toggle('show', onMapInEditor && state.drawPanelOpen);
+}
+
+document.getElementById('drawToggleBtn').addEventListener('click', ()=>{
+  state.drawPanelOpen = !state.drawPanelOpen;
+  updateDrawToolbarVisibility();
+});
 
 document.getElementById('addAllodBtn').addEventListener('click', async ()=>{
   const name = prompt('Название нового острова:');
@@ -360,6 +380,7 @@ function showMap(){
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
+  document.getElementById('aboutView').classList.remove('show');
   mapView.style.display='block';
   document.getElementById('zoomCtrl').style.display='flex';
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='map'));

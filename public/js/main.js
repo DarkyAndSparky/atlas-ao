@@ -18,6 +18,7 @@ async function boot(){
   await loadFactionIcons();
   await loadSiteSettings();
   await updateAuthUI();
+  loadPublicSystemInfo();
 }
 
 function showServerOfflineMessage(){
@@ -37,18 +38,136 @@ function showServerOfflineMessage(){
   document.getElementById('offlineRetryBtn').addEventListener('click', ()=> location.reload());
 }
 
-/* ====================== ABOUT MODAL ====================== */
-const aboutOverlay = document.getElementById('aboutOverlay');
-document.getElementById('aboutBtn').addEventListener('click', ()=>{
+/* ====================== МИНИ-ПЛАШКА «О СИСТЕМЕ» В ФУТЕРЕ (публичная) ====================== */
+async function loadPublicSystemInfo(){
+  try{
+    const info = await api('/system/public');
+    document.getElementById('sysInfoVersion').textContent = info.version;
+    if(info.author){
+      const authorEl = document.getElementById('sysInfoAuthor');
+      authorEl.textContent = info.author;
+      authorEl.href = `https://github.com/${info.author}`;
+    }
+    if(info.repository) document.getElementById('sysInfoRepo').href = info.repository;
+  }catch(e){
+    document.getElementById('sysInfoVersion').textContent = '—';
+  }
+}
+
+document.getElementById('sysInfoVersion').addEventListener('click', ()=>{
   if(!authStatus.loggedIn){ openAuth(); return; }
-  if(authStatus.role !== 'admin'){ toast('«О системе» доступно только администратору.'); return; }
-  document.getElementById('aboutCount').textContent = state.data.length || '—';
-  document.getElementById('aboutAddress').textContent = window.location.origin;
-  document.getElementById('aboutHealthResult').textContent = '';
-  document.getElementById('aboutHealthResult').className = 'about-health';
-  aboutOverlay.classList.add('show');
-  loadSystemInfo();
+  if(authStatus.role !== 'admin'){ toast('Полная страница «О системе» доступна только администратору.'); return; }
+  showAbout();
 });
+
+/* ====================== ВКЛАДКА «О СИСТЕМЕ» (полноценная, только admin) ====================== */
+function showAbout(){
+  state.view = 'about';
+  state.currentId = null; state.currentLocId = null;
+  mapView.style.display='none';
+  document.getElementById('zoomCtrl').style.display='none';
+  detailView.classList.remove('show');
+  document.getElementById('wikiView').classList.remove('show');
+  document.getElementById('configView').classList.remove('show');
+  document.getElementById('aboutView').classList.add('show');
+  document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.remove('active'));
+  trayEl.classList.remove('show');
+  updateDrawToolbarVisibility();
+  renderAboutPanel();
+}
+
+function aboutBreadcrumb(){
+  return `<div class="breadcrumb"><span class="breadcrumb-link" data-action="show-map">Атлас</span> / О системе</div>`;
+}
+
+async function renderAboutPanel(){
+  const wrap = document.getElementById('aboutView');
+  wrap.innerHTML = `
+    <div class="config-hero">
+      ${aboutBreadcrumb()}
+      <h1>О системе</h1>
+    </div>
+    <div class="about-body">
+
+      <div class="about-actions">
+        <button id="aboutHealthBtn" type="button">🔍 Проверить состояние</button>
+        <button id="aboutRefreshBtn" type="button">⚙️ Обновить данные</button>
+      </div>
+      <div class="about-health" id="aboutHealthResult"></div>
+
+      <div class="config-card config-card-wide">
+        <div class="about-rows">
+          <div class="about-row"><span>Версия</span><b id="aboutVersion">—</b></div>
+          <div class="about-row"><span>Аллодов в базе</span><b id="aboutCount">${state.data.length || '—'}</b></div>
+          <div class="about-row"><span>БД</span><b><code>server/atlas.db</code> (node:sqlite)</b></div>
+          <div class="about-row"><span>Сервер</span><b>Node.js + Express</b></div>
+          <div class="about-row"><span>Адрес</span><b><code id="aboutAddress">${window.location.origin}</code></b></div>
+        </div>
+        <p class="about-desc" style="margin-top:14px;">Атлас Аллодов — самостоятельный сайт-энциклопедия аллодов
+        (островов) вселенной Allods Online: глобальная карта, страницы островов с историей и галереей,
+        встроенный редактор для наполнения.</p>
+      </div>
+
+      <div class="config-card config-card-wide about-section" id="aboutEnvSection">
+        <div class="about-section-title">Окружение</div>
+        <div class="about-rows" id="aboutEnvRows"></div>
+      </div>
+
+      <div class="config-card config-card-wide about-section" id="aboutTechSection">
+        <div class="about-section-title">Технологии</div>
+        <div class="about-tech-grid" id="aboutTechGrid"></div>
+      </div>
+
+      <div class="config-card config-card-wide about-section" id="aboutDepsSection">
+        <div class="about-deps-header">
+          <div class="about-section-title" style="margin:0;">Зависимости</div>
+          <button id="aboutCheckUpdatesBtn" type="button" class="about-check-btn">🔄 Проверить обновления</button>
+        </div>
+        <div class="about-deps-status" id="aboutDepsStatus"></div>
+        <div class="about-deps-table" id="aboutDepsTable"></div>
+      </div>
+
+      <div class="config-card config-card-wide about-section" id="aboutChangelogSection">
+        <div class="about-section-title">Последние изменения</div>
+        <div class="about-changelog" id="aboutChangelog"></div>
+      </div>
+
+      <div class="config-card config-card-wide about-section">
+        <div class="about-section-title">Лицензия</div>
+        <p class="about-desc" style="margin-bottom:14px;">
+          Лицензия <b>MIT</b> распространяется только на исходный код проекта.
+          Все ресурсы вселенной Allods Online (название, арты, скриншоты и другой
+          игровой контент) принадлежат их правообладателю — ASTRUM ENTERTAINMENT /
+          ASTRUM LAB LLC — и лицензией MIT не покрываются.
+        </p>
+        <a id="aboutLicenseDownload" class="about-license-btn" href="/api/system/license" download>⬇️ Скачать лицензию (.txt)</a>
+      </div>
+
+      <div class="config-card config-card-wide">
+        <p class="about-legal">
+          Это неофициальный, некоммерческий фан-проект. Он не разработан и не поддерживается
+          студией ASTRUM ENTERTAINMENT / ASTRUM LAB LLC, не аффилирован с ней и не претендует
+          на официальность или полную точность сведений. Все материалы собраны и систематизированы
+          энтузиастами, не являющимися сотрудниками разработчика, вручную и на основе открытых
+          источников — часть данных может быть неполной, устаревшей или в будущем не соответствовать
+          актуальному состоянию игры.
+        </p>
+        <p class="about-copyright">
+          © 2026 ASTRUM LAB LLC. Все права защищены.<br>
+          Все товарные знаки являются собственностью их правообладателей.
+        </p>
+        <p class="about-author" style="margin-top:10px;">
+          Автор: <a href="https://www.linkedin.com/in/tarentiev-makar/" target="_blank" rel="noopener">Макар Терентьев</a>
+        </p>
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById('aboutCount').textContent = state.data.length || '—';
+  loadSystemInfo();
+  wireAboutHandlers();
+}
 
 function formatUptime(sec){
   const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
@@ -104,75 +223,87 @@ async function loadSystemInfo(){
       `).join('');
     }
   }catch(e){
-    // не критично — остальная часть модалки всё равно работает
+    // не критично — остальная часть вкладки всё равно работает
   }
 }
 
-document.getElementById('aboutCheckUpdatesBtn').addEventListener('click', async ()=>{
-  const btn = document.getElementById('aboutCheckUpdatesBtn');
-  const status = document.getElementById('aboutDepsStatus');
-  btn.disabled = true;
-  status.className = 'about-deps-status';
-  status.textContent = 'Проверяю на npm…';
-  try{
-    const { results, checkedAt } = await api('/system/check-updates');
-    results.forEach(r=>{
-      const row = document.querySelector(`.about-deps-row[data-dep="${r.name}"]`);
-      if(!row) return;
-      const b = row.querySelector('b');
-      if(r.error){
-        b.innerHTML = `${escapeHtml(r.installed || '—')} <span style="opacity:.5;">— ошибка проверки</span>`;
-        return;
-      }
-      const cls = r.upToDate ? 'dep-ok' : 'dep-outdated';
-      const note = r.upToDate ? 'актуально' : `новее: ${r.latest}`;
-      b.className = cls;
-      b.innerHTML = `${escapeHtml(r.installed || '—')} <span style="opacity:.5;">— ${escapeHtml(note)}</span>`;
-    });
-    const outdated = results.filter(r=>!r.error && !r.upToDate).length;
-    status.textContent = outdated
-      ? `Проверено ${new Date(checkedAt).toLocaleTimeString('ru-RU')} — ${outdated} пакет(ов) можно обновить.`
-      : `Все пакеты актуальны — проверено ${new Date(checkedAt).toLocaleTimeString('ru-RU')}.`;
-  }catch(e){
-    status.className = 'about-deps-status error';
-    status.textContent = 'Не удалось проверить обновления: ' + e.message;
-  }finally{
-    btn.disabled = false;
-  }
-});
-document.getElementById('aboutClose').addEventListener('click', ()=> aboutOverlay.classList.remove('show'));
-aboutOverlay.addEventListener('mousedown', e=>{ if(e.target===aboutOverlay) aboutOverlay.classList.remove('show'); });
+// DOM вкладки «О системе» пересоздаётся при каждом renderAboutPanel() (как и
+// в config-панели) — обработчики навешиваются заново каждый раз, поэтому
+// вынесены в отдельную функцию, а не document.getElementById(...).addEventListener
+// на уровне модуля (тот сработал бы только один раз, на первый рендер).
+function wireAboutHandlers(){
+  document.getElementById('aboutCheckUpdatesBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('aboutCheckUpdatesBtn');
+    const status = document.getElementById('aboutDepsStatus');
+    btn.disabled = true;
+    status.className = 'about-deps-status';
+    status.textContent = 'Проверяю на npm…';
+    try{
+      const { results, checkedAt } = await api('/system/check-updates');
+      results.forEach(r=>{
+        const row = document.querySelector(`.about-deps-row[data-dep="${r.name}"]`);
+        if(!row) return;
+        const b = row.querySelector('b');
+        if(r.error){
+          b.innerHTML = `${escapeHtml(r.installed || '—')} <span style="opacity:.5;">— ошибка проверки</span>`;
+          return;
+        }
+        const cls = r.upToDate ? 'dep-ok' : 'dep-outdated';
+        const note = r.upToDate ? 'актуально' : `новее: ${r.latest}`;
+        b.className = cls;
+        b.innerHTML = `${escapeHtml(r.installed || '—')} <span style="opacity:.5;">— ${escapeHtml(note)}</span>`;
+      });
+      const outdated = results.filter(r=>!r.error && !r.upToDate).length;
+      status.textContent = outdated
+        ? `Проверено ${new Date(checkedAt).toLocaleTimeString('ru-RU')} — ${outdated} пакет(ов) можно обновить.`
+        : `Все пакеты актуальны — проверено ${new Date(checkedAt).toLocaleTimeString('ru-RU')}.`;
+    }catch(e){
+      status.className = 'about-deps-status error';
+      status.textContent = 'Не удалось проверить обновления: ' + e.message;
+    }finally{
+      btn.disabled = false;
+    }
+  });
 
-document.getElementById('aboutHealthBtn').addEventListener('click', async ()=>{
-  const el = document.getElementById('aboutHealthResult');
-  el.className = 'about-health';
-  el.textContent = 'Проверяю…';
-  const startedAt = performance.now();
-  try{
-    const rows = await api('/allods');
-    const ms = Math.round(performance.now() - startedAt);
-    el.textContent = `Сервер отвечает: ${rows.length} аллодов, ${ms} мс.`;
-  }catch(e){
-    el.classList.add('error');
-    el.textContent = 'Сервер не отвечает: ' + e.message;
-  }
-});
+  document.getElementById('aboutHealthBtn').addEventListener('click', async ()=>{
+    const el = document.getElementById('aboutHealthResult');
+    el.className = 'about-health';
+    el.textContent = 'Проверяю…';
+    const startedAt = performance.now();
+    try{
+      const rows = await api('/allods');
+      const ms = Math.round(performance.now() - startedAt);
+      el.textContent = `Сервер отвечает: ${rows.length} аллодов, ${ms} мс.`;
+    }catch(e){
+      el.classList.add('error');
+      el.textContent = 'Сервер не отвечает: ' + e.message;
+    }
+  });
 
-document.getElementById('aboutRefreshBtn').addEventListener('click', async ()=>{
-  const el = document.getElementById('aboutHealthResult');
-  el.className = 'about-health';
-  el.textContent = 'Обновляю данные…';
-  try{
-    state.data = await api('/allods');
-    initFilterSelects();
-    renderMarkers(); renderTray();
-    if(state.view==='detail' || state.view==='location') renderDetail();
-    document.getElementById('aboutCount').textContent = state.data.length;
-    el.textContent = 'Данные обновлены с сервера.';
-  }catch(e){
-    el.classList.add('error');
-    el.textContent = 'Не удалось обновить: ' + e.message;
-  }
+  document.getElementById('aboutRefreshBtn').addEventListener('click', async ()=>{
+    const el = document.getElementById('aboutHealthResult');
+    el.className = 'about-health';
+    el.textContent = 'Обновляю данные…';
+    try{
+      state.data = await api('/allods');
+      initFilterSelects();
+      renderMarkers(); renderTray();
+      if(state.view==='detail' || state.view==='location') renderDetail();
+      document.getElementById('aboutCount').textContent = state.data.length;
+      el.textContent = 'Данные обновлены с сервера.';
+    }catch(e){
+      el.classList.add('error');
+      el.textContent = 'Не удалось обновить: ' + e.message;
+    }
+  });
+}
+
+// aboutView — тот же DOM-узел на протяжении всей жизни страницы (как и
+// configView), поэтому делегированный обработчик хлебной крошки достаточно
+// повесить один раз.
+document.getElementById('aboutView').addEventListener('click', (ev)=>{
+  const el = ev.target.closest('[data-action="show-map"]');
+  if(el) showMap();
 });
 
 boot();

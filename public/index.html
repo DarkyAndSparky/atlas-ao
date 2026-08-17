@@ -85,11 +85,16 @@
     <div id="emptyHint">Ни один остров ещё не размещён на карте.<br>Включите редактор и перетащите остров из списка слева.</div>
   </div>
 
-  <div id="drawToolbar" class="editor-hidden">
+  <button id="drawToggleBtn" type="button" title="Инструменты рисования">🖌</button>
+
+  <div id="drawToolbar">
     <button class="draw-tool" data-tool="text" title="Текстовая подпись">T</button>
     <button class="draw-tool" data-tool="line" title="Линия">╱</button>
+    <button class="draw-tool" data-tool="arrow" title="Стрелка">↗</button>
     <button class="draw-tool" data-tool="rect" title="Прямоугольник">▭</button>
     <button class="draw-tool" data-tool="circle" title="Круг">◯</button>
+    <button class="draw-tool" data-tool="polygon" title="Многоугольник (кликайте точки, двойной клик или Enter — завершить, Esc — отмена)">⬠</button>
+    <button class="draw-tool" data-tool="freehand" title="Рисование от руки">〰</button>
     <button class="draw-tool" data-tool="icon" title="Украшение (картинка)">🖼</button>
     <button class="draw-tool" data-tool="erase" title="Стереть пометку">✕</button>
     <div class="draw-colors">
@@ -98,6 +103,22 @@
       <button class="draw-color" data-color="#6fd3d9" style="background:#6fd3d9" title="Голубой"></button>
       <button class="draw-color" data-color="#8fd96f" style="background:#8fd96f" title="Зелёный"></button>
       <button class="draw-color" data-color="#f2f2f2" style="background:#f2f2f2" title="Белый"></button>
+    </div>
+
+    <div class="draw-slider-row">
+      <label for="drawStrokeWidth" title="Толщина линии">━</label>
+      <input type="range" id="drawStrokeWidth" min="1" max="16" step="1" value="2">
+      <span id="drawStrokeWidthVal" class="draw-slider-val">2</span>
+    </div>
+    <div class="draw-slider-row">
+      <label for="drawOpacity" title="Прозрачность">◑</label>
+      <input type="range" id="drawOpacity" min="10" max="100" step="10" value="100">
+      <span id="drawOpacityVal" class="draw-slider-val">100%</span>
+    </div>
+
+    <div class="draw-toolbar-actions">
+      <button id="drawUndoBtn" type="button" title="Отменить последнее действие (Ctrl+Z)">↩ Отменить</button>
+      <button id="drawLayerToggleBtn" type="button" class="active" title="Показать/скрыть все пометки на карте">👁 Пометки</button>
     </div>
   </div>
 
@@ -116,6 +137,8 @@
 
   <div id="configView"></div>
 
+  <div id="aboutView"></div>
+
   <div id="detailView"></div>
 
   <div id="lightbox">
@@ -129,82 +152,15 @@
   <div id="legalFooter">
     <span class="legal-text">Неофициальный фан-проект. Не связан с ASTRUM ENTERTAINMENT / ASTRUM LAB LLC и не претендует на официальность или точность — сведения собраны энтузиастами и могут быть неполными, устаревшими или содержать ошибки.</span>
     <span class="legal-copy">© 2026 ASTRUM LAB LLC. Все права защищены.</span>
-    <button id="aboutBtn" type="button" style="display:none;">ℹ️ О системе</button>
-  </div>
-
-  <div id="aboutOverlay">
-    <div id="aboutModal">
-      <div class="about-title">О системе</div>
-
-      <div class="about-actions">
-        <button id="aboutHealthBtn" type="button">🔍 Проверить состояние</button>
-        <button id="aboutRefreshBtn" type="button">⚙️ Обновить данные</button>
-      </div>
-      <div class="about-health" id="aboutHealthResult"></div>
-
-      <div class="about-rows">
-        <div class="about-row"><span>Версия</span><b id="aboutVersion">—</b></div>
-        <div class="about-row"><span>Аллодов в базе</span><b id="aboutCount">—</b></div>
-        <div class="about-row"><span>БД</span><b><code>server/atlas.db</code> (node:sqlite)</b></div>
-        <div class="about-row"><span>Сервер</span><b>Node.js + Express</b></div>
-        <div class="about-row"><span>Адрес</span><b><code id="aboutAddress">—</code></b></div>
-      </div>
-
-      <p class="about-desc">Атлас Аллодов — самостоятельный сайт-энциклопедия аллодов (островов) вселенной Allods Online: глобальная карта, страницы островов с историей и галереей, встроенный редактор для наполнения.</p>
-
-      <div class="about-section" id="aboutEnvSection">
-        <div class="about-section-title">Окружение</div>
-        <div class="about-rows" id="aboutEnvRows"></div>
-      </div>
-
-      <div class="about-section" id="aboutTechSection">
-        <div class="about-section-title">Технологии</div>
-        <div class="about-tech-grid" id="aboutTechGrid"></div>
-      </div>
-
-      <div class="about-section" id="aboutDepsSection">
-        <div class="about-deps-header">
-          <div class="about-section-title" style="margin:0;">Зависимости</div>
-          <button id="aboutCheckUpdatesBtn" type="button" class="about-check-btn">🔄 Проверить обновления</button>
-        </div>
-        <div class="about-deps-status" id="aboutDepsStatus"></div>
-        <div class="about-deps-table" id="aboutDepsTable"></div>
-      </div>
-
-      <div class="about-section" id="aboutChangelogSection">
-        <div class="about-section-title">Последние изменения</div>
-        <div class="about-changelog" id="aboutChangelog"></div>
-      </div>
-
-      <div class="about-section">
-        <div class="about-section-title">Лицензия</div>
-        <p class="about-desc" style="margin-bottom:10px;">
-          Лицензия <b>MIT</b> распространяется только на исходный код проекта.
-          Все ресурсы вселенной Allods Online (название, арты, скриншоты и другой
-          игровой контент) принадлежат их правообладателю — ASTRUM ENTERTAINMENT /
-          ASTRUM LAB LLC — и лицензией MIT не покрываются.
-        </p>
-        <a id="aboutLicenseDownload" class="about-license-btn" href="/api/system/license" download>⬇️ Скачать лицензию (.txt)</a>
-      </div>
-
-      <p class="about-legal">
-        Это неофициальный, некоммерческий фан-проект. Он не разработан и не поддерживается
-        студией ASTRUM ENTERTAINMENT / ASTRUM LAB LLC, не аффилирован с ней и не претендует
-        на официальность или полную точность сведений. Все материалы собраны и систематизированы
-        энтузиастами, не являющимися сотрудниками разработчика, вручную и на основе открытых
-        источников — часть данных может быть неполной, устаревшей или в будущем не соответствовать
-        актуальному состоянию игры.
-      </p>
-      <p class="about-copyright">
-        © 2026 ASTRUM LAB LLC. Все права защищены.<br>
-        Все товарные знаки являются собственностью их правообладателей.
-      </p>
-
-      <div class="about-author">
-        Автор: <a href="https://www.linkedin.com/in/tarentiev-makar/" target="_blank" rel="noopener">Макар Терентьев</a>
-      </div>
-
-      <button class="about-close" id="aboutClose">Закрыть</button>
+    <div id="sysInfoStrip">
+      <a id="sysInfoLicense" class="sys-info-item" href="/api/system/license" download title="Скачать текст лицензии">MIT</a>
+      <span class="sys-info-sep">·</span>
+      <a id="sysInfoAuthor" class="sys-info-item" href="https://github.com/DarkyAndSparky" target="_blank" rel="noopener">DarkyAndSparky</a>
+      <a id="sysInfoRepo" class="sys-info-item sys-info-icon" href="https://github.com/DarkyAndSparky/atlas-ao" target="_blank" rel="noopener" title="Репозиторий на GitHub">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+      <span class="sys-info-sep">·</span>
+      <button id="sysInfoVersion" class="sys-info-item sys-info-version" type="button" title="О системе">v…</button>
     </div>
   </div>
 

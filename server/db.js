@@ -135,9 +135,13 @@ CREATE TABLE IF NOT EXISTS map_annotations (
   r REAL,
   text TEXT,
   icon_url TEXT,
+  -- JSON-массив [{x,y},...] — для многоточечных фигур (полигон, произвольная
+  -- линия от руки); для остальных типов остаётся NULL, координаты в x1/y1/x2/y2/r
+  points TEXT,
   color TEXT NOT NULL DEFAULT '#e8c874',
   stroke_width REAL NOT NULL DEFAULT 2,
   font_size REAL NOT NULL DEFAULT 16,
+  opacity REAL NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_annotations_project ON map_annotations(project);
@@ -236,6 +240,15 @@ if(annotCols.length && !annotCols.includes('icon_url')){
     SELECT id, project, type, x1, y1, x2, y2, r, text, color, stroke_width, font_size, created_at FROM map_annotations_old`);
   db.exec('DROP TABLE map_annotations_old');
   db.exec('CREATE INDEX IF NOT EXISTS idx_annotations_project ON map_annotations(project)');
+}
+
+// миграция: points/opacity — простой ADD COLUMN (в отличие от icon_url выше,
+// тут не было CHECK-ограничения, которое требовало бы пересоздания таблицы)
+const annotCols2 = db.prepare("PRAGMA table_info(map_annotations)").all().map(c=>c.name);
+if(annotCols2.length && !annotCols2.includes('points')){
+  console.log('Миграция: добавляю поддержку многоточечных фигур (полигон/от руки) и прозрачности...');
+  db.exec('ALTER TABLE map_annotations ADD COLUMN points TEXT');
+  db.exec("ALTER TABLE map_annotations ADD COLUMN opacity REAL NOT NULL DEFAULT 1");
 }
 
 if(isNew){

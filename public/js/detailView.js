@@ -8,6 +8,7 @@ function openDetail(id, locId=null){
   document.getElementById('zoomCtrl').style.display='none';
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
+  document.getElementById('aboutView').classList.remove('show');
   detailView.classList.add('show');
   renderDetail();
   renderTray();

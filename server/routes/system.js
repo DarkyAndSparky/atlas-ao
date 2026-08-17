@@ -21,6 +21,16 @@ function readVersion(){
   catch(e){ return pkg.version || 'неизвестно'; }
 }
 
+// GitHub owner/repo из package.json.repository.url — для мини-плашки внизу
+// страницы (публичная, без логина), чтобы не хардкодить имя автора и ссылку
+// на репозиторий отдельно от того единственного места, где они уже заданы.
+function githubInfoFromRepoUrl(url){
+  if(!url) return null;
+  const m = url.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
+  if(!m) return null;
+  return { owner: m[1], repo: m[2], webUrl: `https://github.com/${m[1]}/${m[2]}` };
+}
+
 // Парсер CHANGELOG.md (формат Keep a Changelog). Секции вида
 // "## [версия] — дата" (без даты — например [Unreleased] — тоже
 // поддерживаются, просто date=null), внутри — подсекции "### Добавлено/
@@ -83,6 +93,19 @@ const TECHNOLOGIES = [
   { icon: '🎨', name: 'Vanilla JS + HTML/CSS', desc: 'Фронтенд без фреймворков и сборщиков' },
   { icon: '🎭', name: 'Playwright', desc: 'E2E-тесты (скриншоты/рендер используется точечно)' },
 ];
+
+// Публичная мини-инфа — БЕЗ requireAdmin: версия/автор/ссылка на репозиторий
+// для плашки внизу страницы, видной вообще всем посетителям (не только
+// вошедшим). Полная диагностика (окружение, зависимости, changelog) — это
+// уже /system, требует admin.
+router.get('/public', (req, res)=>{
+  const gh = githubInfoFromRepoUrl(pkg.repository && pkg.repository.url);
+  res.json({
+    version: readVersion(),
+    author: gh ? gh.owner : (pkg.author || null),
+    repository: gh ? gh.webUrl : null,
+  });
+});
 
 router.get('/', requireAdmin, (req, res)=>{
   const allodsCount = db.prepare('SELECT COUNT(*) AS c FROM allods').get().c;

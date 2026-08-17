@@ -14,23 +14,22 @@ async function updateAuthUI(){
   const btn = document.getElementById('authBtn');
   const editorBtn = document.getElementById('editorToggle');
   const configBtn = document.getElementById('configBtn');
-  const aboutBtn = document.getElementById('aboutBtn');
   const isAdmin = authStatus.loggedIn && authStatus.role === 'admin';
   if(authStatus.loggedIn){
     const roleLabel = authStatus.role === 'admin' ? 'админ' : 'редактор';
     btn.textContent = `Выйти (${authStatus.username} · ${roleLabel})`;
     btn.classList.add('logged-in');
     editorBtn.title = '';
-    // «Настройки» и «О системе» — только администратору (управление
-    // пользователями, бэкапы, конфигурация сайта, диагностика окружения)
+    // «Настройки» — только администратору (управление пользователями,
+    // бэкапы, конфигурация сайта); «О системе» видна всем в виде мини-плашки
+    // внизу (см. main.js), а полная вкладка открывается по клику на версию —
+    // тоже только администратору, эта проверка внутри самого обработчика клика.
     if(configBtn) configBtn.style.display = isAdmin ? 'inline-block' : 'none';
-    if(aboutBtn) aboutBtn.style.display = isAdmin ? 'inline-block' : 'none';
   }else{
     btn.textContent = 'Войти';
     btn.classList.remove('logged-in');
     if(configBtn) configBtn.style.display = 'none';
-    if(aboutBtn) aboutBtn.style.display = 'none';
-    if(state.view === 'config') showMap();
+    if(state.view === 'config' || state.view === 'about') showMap();
     if(state.editorOn){
       state.editorOn = false;
       editorBtn.classList.remove('on');

@@ -18,6 +18,7 @@
     "prepare": "node scripts/install-hooks.js"
   },
   "dependencies": {
+    "adm-zip": "^0.6.0",
     "dompurify": "^3.4.13",
     "express": "^4.19.2",
     "express-session": "^1.18.0",

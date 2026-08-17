@@ -2,6 +2,7 @@
 const state = {
   data: [],
   editorOn: false,
+  drawPanelOpen: false, // отдельный вкл/выкл панели рисования, независимо от editorOn
   view: 'map',
   returnView: 'map', // map или wiki — куда возвращаться из деталей острова (клик по тегу, кнопка "назад")
   currentId: null,

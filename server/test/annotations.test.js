@@ -208,3 +208,101 @@ test('DELETE без входа -> 401', async ()=>{
   const r = await c.del('/api/annotations/whatever');
   assert.equal(r.status, 401);
 });
+
+/* ---------------- новые типы фигур: стрелка, полигон, от руки ---------------- */
+
+test('стрелка (arrow) создаётся как линия — нужна вторая точка', async ()=>{
+  const c = await loginClient();
+  const bad = await c.post('/api/annotations', { project: PROJECT, type:'arrow', x1:0, y1:0 });
+  assert.equal(bad.status, 400);
+  const ok = await c.post('/api/annotations', { project: PROJECT, type:'arrow', x1:0, y1:0, x2:50, y2:50 });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.type, 'arrow');
+  assert.equal(ok.data.x2, 50);
+});
+
+test('полигон: меньше 3 точек отклоняется, 3+ создаётся с points', async ()=>{
+  const c = await loginClient();
+  const tooFew = await c.post('/api/annotations', {
+    project: PROJECT, type:'polygon', x1:0, y1:0, points:[{x:0,y:0},{x:10,y:10}],
+  });
+  assert.equal(tooFew.status, 400);
+
+  const ok = await c.post('/api/annotations', {
+    project: PROJECT, type:'polygon', x1:0, y1:0,
+    points:[{x:0,y:0},{x:10,y:0},{x:10,y:10},{x:0,y:10}],
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.points.length, 4);
+  assert.deepEqual(ok.data.points[2], { x:10, y:10 });
+});
+
+test('от руки (freehand): меньше 2 точек отклоняется, точки с не-числами отклоняются', async ()=>{
+  const c = await loginClient();
+  const tooFew = await c.post('/api/annotations', {
+    project: PROJECT, type:'freehand', x1:0, y1:0, points:[{x:0,y:0}],
+  });
+  assert.equal(tooFew.status, 400);
+
+  const badPoint = await c.post('/api/annotations', {
+    project: PROJECT, type:'freehand', x1:0, y1:0, points:[{x:0,y:0},{x:'oops',y:5}],
+  });
+  assert.equal(badPoint.status, 400);
+
+  const ok = await c.post('/api/annotations', {
+    project: PROJECT, type:'freehand', x1:0, y1:0,
+    points:[{x:0,y:0},{x:5,y:2},{x:9,y:8},{x:14,y:3}],
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.points.length, 4);
+});
+
+test('слишком много точек (>500) отклоняется', async ()=>{
+  const c = await loginClient();
+  const points = Array.from({length: 501}, (_,i)=>({x:i, y:i}));
+  const r = await c.post('/api/annotations', { project: PROJECT, type:'freehand', x1:0, y1:0, points });
+  assert.equal(r.status, 400);
+});
+
+/* ---------------- прозрачность ---------------- */
+
+test('opacity: значение сохраняется и ограничивается диапазоном [0.1, 1]', async ()=>{
+  const c = await loginClient();
+  const half = await c.post('/api/annotations', { project: PROJECT, type:'circle', x1:0, y1:0, r:10, opacity:0.5 });
+  assert.equal(half.data.opacity, 0.5);
+
+  const tooLow = await c.post('/api/annotations', { project: PROJECT, type:'circle', x1:0, y1:0, r:10, opacity:0 });
+  assert.equal(tooLow.data.opacity, 0.1);
+
+  const tooHigh = await c.post('/api/annotations', { project: PROJECT, type:'circle', x1:0, y1:0, r:10, opacity:5 });
+  assert.equal(tooHigh.data.opacity, 1);
+
+  const omitted = await c.post('/api/annotations', { project: PROJECT, type:'circle', x1:0, y1:0, r:10 });
+  assert.equal(omitted.data.opacity, 1);
+});
+
+test('PATCH может обновить points у полигона (перемещение фигуры целиком) и opacity', async ()=>{
+  const c = await loginClient();
+  const created = await c.post('/api/annotations', {
+    project: PROJECT, type:'polygon', x1:0, y1:0,
+    points:[{x:0,y:0},{x:10,y:0},{x:5,y:10}],
+  });
+  const id = created.data.id;
+
+  const moved = await c.patch(`/api/annotations/${id}`, {
+    points:[{x:100,y:100},{x:110,y:100},{x:105,y:110}],
+    opacity: 0.3,
+  });
+  assert.equal(moved.status, 200);
+  assert.deepEqual(moved.data.points[0], { x:100, y:100 });
+  assert.equal(moved.data.opacity, 0.3);
+});
+
+test('PATCH points у типов, для которых points не применим (line), игнорируется молча', async ()=>{
+  const c = await loginClient();
+  const created = await c.post('/api/annotations', { project: PROJECT, type:'line', x1:0, y1:0, x2:5, y2:5 });
+  const id = created.data.id;
+  const r = await c.patch(`/api/annotations/${id}`, { points:[{x:1,y:1},{x:2,y:2}] });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.points, null);
+});

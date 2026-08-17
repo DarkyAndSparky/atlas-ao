@@ -327,14 +327,28 @@ body{
 }
 #zoomCtrl button:hover{border-color:var(--gold);}
 
-/* ---------- drawing toolbar (векторный слой рисования на карте) ---------- */
+/* ---------- drawing toolbar (векторный слой рисования на карте) ----------
+   Видимость управляется из JS (см. updateDrawToolbarVisibility в mapView.js),
+   не одним только body.editor-on — иначе панель протекала на все вкладки
+   (детали острова, вики, настройки), а не только на карту. Справа, а не
+   слева — слева уже #tray со списком неразмещённых островов, панели
+   перекрывали друг друга. */
+#drawToggleBtn{
+  position:absolute;right:20px;top:calc(var(--topbar-h,64px) + 16px);z-index:46;
+  width:36px;height:36px;background:var(--void-1);border:1px solid var(--line);color:var(--parchment);
+  font-size:16px;border-radius:3px;cursor:pointer;display:none;
+}
+#drawToggleBtn.show{display:block;}
+#drawToggleBtn:hover{border-color:var(--gold);}
+#drawToggleBtn.active{border-color:var(--gold-bright);color:var(--gold-bright);box-shadow:0 0 8px rgba(232,200,116,0.5);}
+
 #drawToolbar{
-  position:absolute;left:20px;bottom:48px;z-index:45;
-  display:none; /* показывается только в режиме редактора — см. body.editor-on ниже */
+  position:absolute;right:20px;top:calc(var(--topbar-h,64px) + 60px);z-index:45;
+  display:none;
   flex-direction:column;gap:8px;background:var(--void-1);border:1px solid var(--line);
   border-radius:6px;padding:8px;
 }
-body.editor-on #drawToolbar{display:flex;}
+#drawToolbar.show{display:flex;}
 .draw-tool{
   width:36px;height:36px;background:var(--void-0);border:1px solid var(--line);color:var(--parchment);
   font-size:16px;border-radius:3px;cursor:pointer;font-family:var(--ui);
@@ -347,6 +361,23 @@ body.editor-on #drawToolbar{display:flex;}
   width:16px;height:16px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;
 }
 .draw-color.active{border-color:var(--parchment);}
+
+.draw-slider-row{
+  display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px solid var(--line);
+}
+.draw-slider-row label{font-size:13px;color:var(--parchment-dim);width:14px;text-align:center;flex:0 0 auto;}
+.draw-slider-row input[type="range"]{flex:1;min-width:0;accent-color:var(--gold-bright);}
+.draw-slider-val{font-family:var(--ui);font-size:10px;color:var(--parchment-dim);width:30px;text-align:right;flex:0 0 auto;}
+
+.draw-toolbar-actions{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--line);}
+.draw-toolbar-actions button{
+  font-family:var(--ui);font-size:11px;background:var(--void-0);border:1px solid var(--line);
+  color:var(--parchment);border-radius:3px;padding:6px 8px;cursor:pointer;white-space:nowrap;
+}
+.draw-toolbar-actions button:hover{border-color:var(--gold);}
+.draw-toolbar-actions button:disabled{opacity:0.4;cursor:default;}
+#drawLayerToggleBtn.active{border-color:var(--gold-bright);color:var(--gold-bright);}
+#drawLayerToggleBtn.layer-hidden{color:var(--imperial);border-color:var(--imperial);}
 #mapView.drawing{cursor:crosshair;}
 #annotLayer{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;}
 .annot-el{pointer-events:all;}
@@ -556,14 +587,6 @@ body.editor-on #drawToolbar{display:flex;}
 .crumbtrail span:hover{color:var(--gold-bright);}
 .crumbtrail .sep{opacity:0.4;}
 
-#aboutBtn{
-  flex:0 0 auto;
-  font-family:var(--ui);font-size:10.5px;letter-spacing:0.3px;
-  color:var(--gold-bright);background:none;border:none;cursor:pointer;
-  opacity:0.85;transition:opacity .15s ease;padding:0;white-space:nowrap;
-}
-#aboutBtn:hover{opacity:1;}
-
 #legalFooter{
   position:fixed;left:0;right:0;bottom:0;z-index:60;
   display:flex;align-items:center;gap:14px;
@@ -580,6 +603,21 @@ body.editor-on #drawToolbar{display:flex;}
   flex:0 0 auto;font-family:var(--ui);font-size:10px;color:var(--parchment-dim);
   opacity:0.75;white-space:nowrap;
 }
+#sysInfoStrip{
+  flex:0 0 auto;display:flex;align-items:center;gap:7px;
+  font-family:var(--ui);font-size:10.5px;
+}
+.sys-info-item{
+  color:var(--gold-bright);text-decoration:none;opacity:0.85;
+  background:none;border:none;font-family:var(--ui);font-size:10.5px;cursor:pointer;padding:0;
+  transition:opacity .15s ease;
+}
+.sys-info-item:hover{opacity:1;}
+.sys-info-sep{color:var(--parchment-dim);opacity:0.4;}
+.sys-info-icon{display:flex;align-items:center;color:var(--parchment-dim);opacity:0.75;}
+.sys-info-icon:hover{color:var(--gold-bright);opacity:1;}
+.sys-info-version{opacity:0.9;}
+.sys-info-version:disabled{cursor:default;opacity:0.6;}
 
 .about-legal{
   font-family:var(--ui);font-size:11.5px;line-height:1.6;color:var(--parchment-dim);
@@ -773,18 +811,22 @@ body.editor-on #drawToolbar{display:flex;}
   .view-toggle-btn{padding:8px 9px;font-size:10.5px;}
 }
 
-#aboutOverlay{
-  position:fixed;inset:0;z-index:300;display:none;
-  background:rgba(6,8,15,0.78);backdrop-filter:blur(3px);
-  align-items:center;justify-content:center;
+#aboutView{
+  position:absolute;inset:0;top:var(--topbar-h,64px);overflow-y:auto;display:none;
+  background:var(--void-0);
 }
-#aboutOverlay.show{display:flex;}
-#aboutModal{
-  width:520px;max-width:92vw;background:var(--void-1);border:1px solid var(--gold);border-radius:4px;
-  padding:26px 26px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);
-  max-height:85vh;overflow-y:auto;
+#aboutView.show{display:block;}
+.about-body{padding:36px 60px 80px;max-width:900px;display:flex;flex-direction:column;gap:20px;}
+.about-actions{display:flex;gap:10px;margin-bottom:2px;flex-wrap:wrap;}
+.about-actions button{
+  font-family:var(--ui);font-size:11.5px;background:var(--void-0);border:1px solid var(--line);
+  color:var(--parchment);border-radius:3px;padding:8px 12px;cursor:pointer;transition:border-color .15s ease;
 }
+.about-actions button:hover{border-color:var(--gold);}
+.about-health{font-family:var(--ui);font-size:11.5px;color:var(--astral);min-height:16px;}
+.about-health.error{color:var(--imperial);}
 .about-section{margin-bottom:18px;}
+.about-section:last-child{margin-bottom:0;}
 .about-section-title{
   font-family:var(--ui);font-size:11px;text-transform:uppercase;letter-spacing:0.8px;
   color:var(--gold-bright);margin-bottom:8px;opacity:0.9;
@@ -827,20 +869,7 @@ body.editor-on #drawToolbar{display:flex;}
   text-decoration:none;cursor:pointer;
 }
 .about-license-btn:hover{background:var(--gold-bright);}
-.about-title{
-  font-family:var(--display);font-size:19px;color:var(--gold-bright);letter-spacing:1px;margin-bottom:16px;
-}
-.about-actions{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
-.about-actions button{
-  font-family:var(--ui);font-size:11.5px;background:var(--void-0);border:1px solid var(--line);
-  color:var(--parchment);border-radius:3px;padding:8px 12px;cursor:pointer;transition:border-color .15s ease;
-}
-.about-actions button:hover{border-color:var(--gold);}
-.about-health{
-  font-family:var(--ui);font-size:11.5px;color:var(--astral);min-height:16px;margin-bottom:14px;
-}
-.about-health.error{color:var(--imperial);}
-.about-rows{border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:16px;}
+.about-rows{border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
 .about-row{
   display:flex;justify-content:space-between;gap:14px;padding:8px 0;
   font-family:var(--ui);font-size:12px;color:var(--parchment-dim);border-top:1px solid var(--line);
@@ -852,20 +881,10 @@ body.editor-on #drawToolbar{display:flex;}
   background:var(--void-0);padding:2px 6px;border-radius:2px;
 }
 .about-desc{
-  font-family:var(--body);font-size:13.5px;line-height:1.6;color:var(--parchment-dim);margin:0 0 16px;
-}
-.about-author{
-  font-family:var(--ui);font-size:12px;color:var(--parchment-dim);margin-bottom:18px;
+  font-family:var(--body);font-size:13.5px;line-height:1.6;color:var(--parchment-dim);margin:0;
 }
 .about-author a{color:var(--gold-bright);text-decoration:none;}
 .about-author a:hover{text-decoration:underline;}
-.about-version{font-family:var(--ui);font-size:10.5px;color:var(--parchment-dim);opacity:0.6;margin-bottom:18px;}
-.about-close{
-  width:100%;font-family:var(--ui);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;
-  background:var(--gold);color:var(--void-0);border:1px solid var(--gold);border-radius:3px;
-  padding:10px;cursor:pointer;font-weight:600;
-}
-.about-close:hover{background:var(--gold-bright);}
 
 #toast{
   position:fixed;bottom:46px;left:50%;transform:translateX(-50%);

@@ -116,9 +116,11 @@ function showConfig(){
   document.getElementById('zoomCtrl').style.display='none';
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
+  document.getElementById('aboutView').classList.remove('show');
   document.getElementById('configView').classList.add('show');
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.remove('active'));
   trayEl.classList.remove('show');
+  updateDrawToolbarVisibility();
   renderConfigPanel();
 }
 
@@ -280,7 +282,7 @@ async function renderConfigPanel(){
 
       <div class="config-card config-card-wide">
         <h3>💾 Данные</h3>
-        <p class="config-hint">Экспорт/импорт содержимого таблиц (JSON) — быстрый способ. Скачать/восстановить базу целиком (.db) — самый надёжный способ переноса на другой компьютер.</p>
+        <p class="config-hint">Экспорт/импорт содержимого таблиц (JSON) — быстрый способ. Скачать/восстановить базу целиком (.db) — самый надёжный способ переноса на другой компьютер, но <b>без</b> загруженных файлов (иконок, галереи) — только структурированные данные и ссылки на них.</p>
         <div class="config-actions" style="margin-bottom:10px;">
           <button class="btn" id="cfgExportBtn">Экспорт (JSON)</button>
           <button class="btn" id="cfgImportBtn">Импорт (JSON)</button>
@@ -290,6 +292,19 @@ async function renderConfigPanel(){
           <button class="btn" id="cfgDownloadDbBtn">Скачать базу целиком (.db)</button>
           <button class="btn" id="cfgRestoreDbBtn">Восстановить базу из файла (.db)</button>
           <input type="file" id="cfgRestoreFile" accept=".db" style="display:none">
+        </div>
+      </div>
+
+      <div class="config-card config-card-wide">
+        <h3>📦 Полный архив сайта (база + файлы)</h3>
+        <p class="config-hint">Для переноса на новый сервер — <b>единственный полный способ</b>: одним .zip
+        и база, и все загруженные изображения (иконки островов, галерея, украшения, логотип). Просто
+        «Скачать базу» выше — не годится для переезда: ссылки на картинки в базе останутся указывать
+        на файлы, которых на новом сервере физически нет.</p>
+        <div class="config-actions">
+          <button class="btn" id="cfgDownloadFullBtn">Скачать полный архив (.zip)</button>
+          <button class="btn" id="cfgRestoreFullBtn">Восстановить из полного архива (.zip)</button>
+          <input type="file" id="cfgRestoreFullFile" accept=".zip" style="display:none">
         </div>
       </div>
 
@@ -525,6 +540,26 @@ async function renderConfigPanel(){
       const result = await api('/backup/restore', { method:'POST', body: fd });
       alert(result.message || 'База восстановлена. Перезапустите сервер вручную.');
     }catch(err){ alert('Не удалось восстановить базу: '+err.message); }
+    e.target.value = '';
+  });
+
+  document.getElementById('cfgDownloadFullBtn').addEventListener('click', ()=>{
+    window.location.href = '/api/backup/download-full';
+  });
+  document.getElementById('cfgRestoreFullBtn').addEventListener('click', ()=> document.getElementById('cfgRestoreFullFile').click());
+  document.getElementById('cfgRestoreFullFile').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    if(!confirm('Заменить ВСЁ содержимое сайта (базу и все загруженные файлы) содержимым архива "'+file.name+'"? '
+      + 'Текущие база и файлы будут сохранены в backups/ на всякий случай, но после этого сервер нужно будет перезапустить вручную.')){
+      e.target.value=''; return;
+    }
+    const fd = new FormData();
+    fd.append('archive', file);
+    try{
+      const result = await api('/backup/restore-full', { method:'POST', body: fd });
+      alert(result.message || 'Сайт восстановлен из полного архива. Перезапустите сервер вручную.');
+    }catch(err){ alert('Не удалось восстановить из архива: '+err.message); }
     e.target.value = '';
   });
 }
