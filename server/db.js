@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS users (
   salt TEXT NOT NULL,
   hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('editor','admin')),
+  must_change_password INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 
@@ -220,6 +221,35 @@ const userCols = db.prepare("PRAGMA table_info(users)").all().map(c=>c.name);
 if(userCols.length && !userCols.includes('role')){
   console.log('Миграция: добавляю роли редакторов (существующие аккаунты становятся admin)...');
   db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'");
+}
+if(userCols.length && !userCols.includes('must_change_password')){
+  console.log('Миграция: добавляю флаг обязательной смены пароля (существующие аккаунты — без принуждения)...');
+  db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+}
+
+// дефолтный аккаунт admin/admin0000 — защита от дурака: если на сервере
+// вообще нет ни одного пользователя (совсем свежая база, и легаси-миграция
+// выше не сработала — например, ей неоткуда было взять старый аккаунт),
+// заводим его сами, а не оставляем сайт без единого способа войти до тех
+// пор, пока кто-то не пройдёт полностью безопасный, но необязательный
+// bootstrap-экран регистрации. must_change_password=1 — форсируем смену
+// пароля при первом входе (см. requireAuth-гейт на фронтенде и в /auth).
+{
+  const hasAnyUserNow = db.prepare('SELECT id FROM users LIMIT 1').get();
+  if(!hasAnyUserNow){
+    console.log('На сервере нет ни одного аккаунта — создаю дефолтный: admin / admin0000 (пароль нужно будет сменить при первом входе).');
+    // scryptSync — не async hashPassword() из security/passwords.js: это
+    // разовое вычисление при самом старте сервера, ДО того как он начал
+    // принимать запросы, а не под конкурентной нагрузкой — как раз тот
+    // случай, когда блокировка event loop на пару сотен мс совершенно не
+    // страшна (в отличие от логина под нагрузкой, ради которого там был
+    // переход на асинхронный scrypt).
+    const crypto = require('crypto');
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync('admin0000', salt, 64).toString('hex');
+    db.prepare('INSERT INTO users (username, salt, hash, role, must_change_password, created_at) VALUES (?,?,?,?,?,?)')
+      .run('admin', salt, hash, 'admin', 1, Date.now());
+  }
 }
 
 // миграция: старые базы уже содержали map_annotations со CHECK-ограничением

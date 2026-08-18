@@ -60,46 +60,76 @@ function makeClient(){
   };
 }
 
-/* ВАЖНО: тесты в этом файле идут по порядку и меняют глобальное состояние
-   (первая успешная регистрация создаёт первый на всю систему аккаунт),
-   поэтому порядок важен и специально выстроен так. */
+/* ВАЖНО: тесты в этом файле идут по порядку и меняют глобальное состояние,
+   поэтому порядок важен и специально выстроен так.
 
-test('до какой-либо регистрации: hasAccount=false, loggedIn=false', async ()=>{
+   С седированным дефолтным admin/admin0000 (см. db.js) на свежей БД уже
+   с самого начала есть аккаунт — открытого bootstrap-режима "первый
+   аккаунт на сервере" на практике не бывает. Вместо самостоятельной
+   регистрации первого пользователя тут: логинимся дефолтным admin,
+   заводим через него 'atlant' как второго admin, затем УДАЛЯЕМ дефолтный
+   admin (это заодно прямая проверка сценария "что будет, если в админке
+   удалить учётку admin" — см. также отдельный test/default-admin.test.js
+   с более подробным разбором этого сценария). После этого шага в системе
+   остаётся только 'atlant' — и весь дальнейший код теста работает ровно
+   так же, как до появления сидирования. */
+
+test('дефолтный admin/admin0000 существует с самого начала — hasAccount=true', async ()=>{
   const c = makeClient();
   const r = await c.get('/api/auth/status');
-  assert.equal(r.data.hasAccount, false);
+  assert.equal(r.data.hasAccount, true);
   assert.equal(r.data.loggedIn, false);
 });
 
-test('слишком короткий пароль отклоняется при бутстрап-регистрации', async ()=>{
+test('слишком короткий пароль отклоняется при регистрации приглашённого (нужны права admin)', async ()=>{
   const c = makeClient();
+  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
   const r = await c.post('/api/auth/register', { username: 'tester', password: 'ab' });
   assert.equal(r.status, 400);
 });
 
 test('пароль короче 8 символов отклоняется (граница)', async ()=>{
   const c = makeClient();
+  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
   const r = await c.post('/api/auth/register', { username: 'tester', password: '1234567' }); // 7 символов
   assert.equal(r.status, 400);
 });
 
 test('некорректное имя пользователя отклоняется', async ()=>{
   const c = makeClient();
+  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
   const r = await c.post('/api/auth/register', { username: 'ab', password: 'correcthorsebattery' }); // короче 3 символов
   assert.equal(r.status, 400);
 });
 
-test('первая (бутстрап) регистрация создаёт аккаунт и сразу логинит', async ()=>{
+test('дефолтный admin создаёт "atlant" вторым admin, затем удаляет сам дефолтный аккаунт', async ()=>{
   const c = makeClient();
-  const r = await c.post('/api/auth/register', { username: 'atlant', password: 'correcthorsebattery' });
-  assert.equal(r.status, 200);
-  const status = await c.get('/api/auth/status');
-  assert.equal(status.data.hasAccount, true);
-  assert.equal(status.data.loggedIn, true);
-  assert.equal(status.data.username, 'atlant');
+  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  const reg = await c.post('/api/auth/register', { username: 'atlant', password: 'correcthorsebattery', role: 'admin' });
+  assert.equal(reg.status, 200);
+
+  const users = await c.get('/api/auth/users');
+  const defaultAdmin = users.data.find(u=>u.username==='admin');
+  assert.ok(defaultAdmin);
+
+  // удаляем дефолтный admin сам через себя же — не последний, atlant уже есть
+  const del = await c.del('/api/auth/users/'+defaultAdmin.id);
+  assert.equal(del.status, 200);
+  assert.equal(del.data.selfDeleted, true);
+
+  const loginDeleted = await makeClient().post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  assert.equal(loginDeleted.status, 401, 'дефолтного admin больше не существует');
+
+  // atlant остался единственным аккаунтом, с этого момента — дальнейшие
+  // тесты в этом файле продолжают ровно с тем состоянием, что и раньше
+  const usersAfter = await makeClient();
+  await usersAfter.post('/api/auth/login', { username: 'atlant', password: 'correcthorsebattery' });
+  const list = await usersAfter.get('/api/auth/users');
+  assert.equal(list.data.length, 1);
+  assert.equal(list.data[0].username, 'atlant');
 });
 
-test('после бутстрапа регистрация без входа запрещена (401)', async ()=>{
+test('регистрация нового пользователя без входа -> 401', async ()=>{
   const c = makeClient(); // новый клиент, не залогинен
   const r = await c.post('/api/auth/register', { username: 'someone-else', password: 'anotherpassword1' });
   assert.equal(r.status, 401);

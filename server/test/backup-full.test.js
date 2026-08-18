@@ -92,7 +92,10 @@ test('без входа -> 401 на обоих новых эндпоинтах',
 
 test('редактор (не admin) не может скачать/восстановить полный архив', async ()=>{
   const admin = makeClient(baseUrl);
-  await admin.post('/api/auth/register', { username:'full-admin', password:'full-admin-pass1' });
+  // с седированным дефолтным admin/admin0000 (см. db.js) на свежей БД уже
+  // есть аккаунт — регистрация нового пользователя требует входа как admin
+  await admin.post('/api/auth/login', { username:'admin', password:'admin0000' });
+  await admin.post('/api/auth/register', { username:'full-admin', password:'full-admin-pass1', role:'admin' });
   await admin.post('/api/auth/register', { username:'full-editor', password:'full-editor-pass1', role:'editor' });
 
   const editor = makeClient(baseUrl);

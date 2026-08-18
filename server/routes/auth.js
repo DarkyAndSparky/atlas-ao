@@ -26,7 +26,7 @@ function countUsers(){
 }
 
 function publicUser(u){
-  return { id: u.id, username: u.username, role: u.role, createdAt: u.created_at };
+  return { id: u.id, username: u.username, role: u.role, mustChangePassword: !!u.must_change_password, createdAt: u.created_at };
 }
 
 // SQLite's COLLATE NOCASE only case-folds ASCII (A-Z/a-z) — 'Империя' и
@@ -45,12 +45,13 @@ router.get('/status', (req, res)=>{
     loggedIn: !!(req.session && req.session.loggedIn),
     username: (req.session && req.session.username) || null,
     role: (req.session && req.session.role) || null,
+    mustChangePassword: !!(req.session && req.session.mustChangePassword),
   });
 });
 
 // Список редакторов — для панели «Настройки → Пользователи» (только админ).
 router.get('/users', requireAdmin, (req, res)=>{
-  const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY created_at ASC').all();
+  const users = db.prepare('SELECT id, username, role, must_change_password, created_at FROM users ORDER BY created_at ASC').all();
   res.json(users.map(publicUser));
 });
 
@@ -91,8 +92,12 @@ router.post('/register', async (req, res, next)=>{
 
     const salt = makeSalt();
     const hash = await hashPassword(password, salt);
-    const info = db.prepare('INSERT INTO users (username, salt, hash, role, created_at) VALUES (?,?,?,?,?)')
-      .run(username, salt, hash, role, Date.now());
+    // must_change_password: для приглашённых (не bootstrap) — начальный
+    // пароль выбрал не сам пользователь, а администратор, так что просим
+    // сменить при первом входе; для bootstrap — пароль свой, форсировать нечего
+    const mustChangePassword = isBootstrap ? 0 : 1;
+    const info = db.prepare('INSERT INTO users (username, salt, hash, role, must_change_password, created_at) VALUES (?,?,?,?,?,?)')
+      .run(username, salt, hash, role, mustChangePassword, Date.now());
 
     if(isBootstrap){
       req.session.regenerate(err=>{
@@ -101,14 +106,15 @@ router.post('/register', async (req, res, next)=>{
         req.session.userId = info.lastInsertRowid;
         req.session.username = username;
         req.session.role = role;
+        req.session.mustChangePassword = false;
         req.session.save(err2=>{
           if(err2) return next(err2);
-          res.json({ ok: true, user: { id: info.lastInsertRowid, username, role } });
+          res.json({ ok: true, user: { id: info.lastInsertRowid, username, role, mustChangePassword: false } });
         });
       });
       return;
     }
-    res.json({ ok: true, user: { id: info.lastInsertRowid, username, role } });
+    res.json({ ok: true, user: { id: info.lastInsertRowid, username, role, mustChangePassword: !!mustChangePassword } });
   }catch(err){ next(err); }
 });
 
@@ -142,9 +148,10 @@ router.post('/login', async (req, res, next)=>{
       req.session.userId = user.id;
       req.session.username = user.username;
       req.session.role = user.role;
+      req.session.mustChangePassword = !!user.must_change_password;
       req.session.save(err2=>{
         if(err2) return next(err2);
-        res.json({ ok: true, user: { id: user.id, username: user.username, role: user.role } });
+        res.json({ ok: true, user: { id: user.id, username: user.username, role: user.role, mustChangePassword: !!user.must_change_password } });
       });
     });
   }catch(err){ next(err); }
@@ -168,8 +175,12 @@ router.post('/password', requireAuth, async (req, res, next)=>{
     }
     const salt = makeSalt();
     const hash = await hashPassword(newPassword, salt);
-    db.prepare('UPDATE users SET salt=?, hash=? WHERE id=?').run(salt, hash, user.id);
-    res.json({ ok: true });
+    db.prepare('UPDATE users SET salt=?, hash=?, must_change_password=0 WHERE id=?').run(salt, hash, user.id);
+    req.session.mustChangePassword = false;
+    req.session.save(err=>{
+      if(err) return next(err);
+      res.json({ ok: true });
+    });
   }catch(err){ next(err); }
 });
 

@@ -60,6 +60,22 @@
     </div>
   </div>
 
+  <div id="forcePassOverlay">
+    <div id="forcePassModal">
+      <div class="am-title">Смена пароля обязательна</div>
+      <div class="am-sub">Этот аккаунт использует временный пароль (например, дефолтный
+      <code>admin0000</code>, или пароль, который для вас задал администратор) — прежде чем
+      продолжить, задайте свой собственный.</div>
+      <input type="password" id="fpCurrent" placeholder="Текущий (временный) пароль" autocomplete="off">
+      <input type="password" id="fpNew" placeholder="Новый пароль (от 8 символов)" autocomplete="off">
+      <input type="password" id="fpNew2" placeholder="Повторите новый пароль" autocomplete="off">
+      <div class="am-err" id="fpErr"></div>
+      <div class="am-actions">
+        <button id="fpSubmit">Сменить пароль</button>
+      </div>
+    </div>
+  </div>
+
   <div id="activeFilterBar" class="hidden">
     <span>Фильтр: <b id="activeFilterLabel"></b></span>
     <button id="clearFilterBtn">✕ Сбросить</button>

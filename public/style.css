@@ -160,6 +160,29 @@ body{
   align-items:center;justify-content:center;
 }
 #authOverlay.show{display:flex;}
+#forcePassOverlay{
+  position:fixed;inset:0;z-index:310;display:none; /* z-index выше authOverlay — эта форма приоритетнее */
+  background:rgba(6,8,15,0.9);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;
+}
+#forcePassOverlay.show{display:flex;}
+#forcePassModal{
+  width:360px;background:var(--void-1);border:1px solid var(--imperial);border-radius:4px;
+  padding:28px 26px;box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+#forcePassModal input{
+  width:100%;background:var(--void-0);border:1px solid var(--line);color:var(--parchment);
+  font-family:var(--ui);font-size:13px;padding:10px 12px;border-radius:3px;outline:none;margin-bottom:10px;
+}
+#forcePassModal input:focus{border-color:var(--gold);}
+#forcePassModal .am-actions{justify-content:stretch;}
+#forcePassModal #fpSubmit{
+  width:100%;font-family:var(--ui);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;
+  background:var(--gold);color:var(--void-0);border:1px solid var(--gold);border-radius:3px;
+  padding:10px;cursor:pointer;font-weight:600;
+}
+#forcePassModal #fpSubmit:hover{background:var(--gold-bright);}
+#forcePassModal code{background:var(--void-0);padding:1px 5px;border-radius:2px;color:var(--gold-bright);}
 #authModal{
   width:340px;background:var(--void-1);border:1px solid var(--gold);border-radius:4px;
   padding:28px 26px;box-shadow:0 20px 60px rgba(0,0,0,0.5);

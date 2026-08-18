@@ -64,9 +64,14 @@ before(async ()=>{
   server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
-  // создаём единственный аккаунт редактора для всех тестов данных
-  const c = makeClient();
-  const reg = await c.post('/api/auth/register', { username: TEST_USERNAME, password: TEST_PASSWORD });
+  // с седированным дефолтным admin/admin0000 (см. db.js) на свежей БД уже
+  // есть аккаунт — регистрация нового тестового пользователя теперь требует
+  // прав admin, а не открытого bootstrap-режима "первый аккаунт на сервере".
+  // Этому файлу конкретно нужна роль admin — тесты дёргают /settings,
+  // /backup, /import (все admin-only).
+  const seedAdmin = makeClient();
+  await seedAdmin.post('/api/auth/login', { username:'admin', password:'admin0000' });
+  const reg = await seedAdmin.post('/api/auth/register', { username: TEST_USERNAME, password: TEST_PASSWORD, role:'admin' });
   assert.equal(reg.status, 200);
 });
 

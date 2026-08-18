@@ -59,7 +59,11 @@ before(async ()=>{
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 
   const c = makeClient();
-  await c.post('/api/auth/register', { username:'restore-tester', password:'restore-tester-pass1' });
+  // с седированным дефолтным admin/admin0000 (см. db.js) на свежей БД уже
+  // есть аккаунт — регистрация нового пользователя требует входа как admin;
+  // restore-tester нужна роль admin — дальше по файлу дёргает /backup/*
+  await c.post('/api/auth/login', { username:'admin', password:'admin0000' });
+  await c.post('/api/auth/register', { username:'restore-tester', password:'restore-tester-pass1', role:'admin' });
   await c.post('/api/allods', { name: 'Остров До Бэкапа' });
 
   const dl = await c.get('/api/backup/download');

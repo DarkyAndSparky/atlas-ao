@@ -25,6 +25,7 @@ async function updateAuthUI(){
     // внизу (см. main.js), а полная вкладка открывается по клику на версию —
     // тоже только администратору, эта проверка внутри самого обработчика клика.
     if(configBtn) configBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    updateForcePasswordUI();
   }else{
     btn.textContent = 'Войти';
     btn.classList.remove('logged-in');
@@ -39,6 +40,7 @@ async function updateAuthUI(){
       if(state.view==='detail' || state.view==='location') renderDetail();
     }
     editorBtn.title = 'Войдите в аккаунт, чтобы редактировать';
+    document.getElementById('forcePassOverlay').classList.remove('show');
   }
 }
 document.getElementById('configBtn').addEventListener('click', ()=>{
@@ -116,3 +118,46 @@ document.getElementById('editorToggle').addEventListener('click', ()=>{
 });
 
 /* Экспорт/импорт/бэкап переехали в панель «Настройки» — см. js/settings.js */
+
+/* ====================== ОБЯЗАТЕЛЬНАЯ СМЕНА ПАРОЛЯ ======================
+   Показывается поверх всего интерфейса (z-index выше authOverlay), без
+   кнопки «отмена» — пока пароль не сменён, ничем другим пользоваться нельзя.
+   Срабатывает для дефолтного admin/admin0000 при первом входе и для любого
+   аккаунта, который завёл кто-то другой (администратор задал начальный
+   пароль не сам пользователь — see routes/auth.js). */
+const forcePassOverlay = document.getElementById('forcePassOverlay');
+const fpErr = document.getElementById('fpErr');
+
+function updateForcePasswordUI(){
+  if(authStatus.loggedIn && authStatus.mustChangePassword){
+    document.getElementById('fpCurrent').value = '';
+    document.getElementById('fpNew').value = '';
+    document.getElementById('fpNew2').value = '';
+    fpErr.textContent = '';
+    forcePassOverlay.classList.add('show');
+    setTimeout(()=> document.getElementById('fpCurrent').focus(), 50);
+  }else{
+    forcePassOverlay.classList.remove('show');
+  }
+}
+
+async function submitForcePasswordChange(){
+  const current = document.getElementById('fpCurrent').value;
+  const p1 = document.getElementById('fpNew').value;
+  const p2 = document.getElementById('fpNew2').value;
+  if(!current){ fpErr.textContent = 'Введите текущий пароль.'; return; }
+  if(p1.length < 8){ fpErr.textContent = 'Новый пароль должен быть не короче 8 символов.'; return; }
+  if(p1 !== p2){ fpErr.textContent = 'Пароли не совпадают.'; return; }
+  if(p1 === current){ fpErr.textContent = 'Новый пароль должен отличаться от текущего.'; return; }
+  try{
+    await api('/auth/password', { method:'POST', body:{ currentPassword: current, newPassword: p1 } });
+    toast('Пароль изменён');
+    await updateAuthUI(); // authStatus.mustChangePassword теперь false — оверлей скроется сам
+  }catch(e){ fpErr.textContent = e.message; }
+}
+document.getElementById('fpSubmit').addEventListener('click', submitForcePasswordChange);
+[document.getElementById('fpCurrent'), document.getElementById('fpNew'), document.getElementById('fpNew2')].forEach(inp=>
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') submitForcePasswordChange(); })
+);
+// намеренно НЕТ обработчика клика по фону (mousedown на forcePassOverlay) —
+// в отличие от authOverlay, эта форма не должна закрываться кликом мимо

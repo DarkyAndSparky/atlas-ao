@@ -23,8 +23,12 @@ before(async ()=>{
   server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
-  const c = makeClient();
-  const reg = await c.post('/api/auth/register', { username:'annotator', password:'annotator-pass-1' });
+  // с седированным дефолтным admin/admin0000 (см. db.js) на свежей БД уже
+  // есть аккаунт — регистрация нового тестового пользователя теперь требует
+  // прав admin, а не открытого bootstrap-режима "первый аккаунт на сервере"
+  const seedAdmin = makeClient();
+  await seedAdmin.post('/api/auth/login', { username:'admin', password:'admin0000' });
+  const reg = await seedAdmin.post('/api/auth/register', { username:'annotator', password:'annotator-pass-1', role:'admin' });
   assert.equal(reg.status, 200);
 });
 
