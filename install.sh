@@ -16,6 +16,7 @@ if ! node scripts/check-node-version.js; then
 fi
 
 echo "Устанавливаю зависимости сервера (Express, SQLite и т.д.)..."
+echo "Это может занять минуту-другую (особенно первый раз) — подождите."
 npm install
 
 echo ""

@@ -19,6 +19,11 @@ services:
       # сервер стоит за Caddy (см. ниже) — доверяем X-Forwarded-* и включаем secure-куки
       ATLAS_TRUST_PROXY: "1"
       ATLAS_HTTPS: "1"
+      # автоматические бэкапы по расписанию — см. .env.example и server/backupScheduler.js;
+      # необязательные, по умолчанию выключено (пустая ATLAS_AUTO_BACKUP != "1")
+      ATLAS_AUTO_BACKUP: ${ATLAS_AUTO_BACKUP:-}
+      ATLAS_AUTO_BACKUP_HOUR: ${ATLAS_AUTO_BACKUP_HOUR:-}
+      ATLAS_AUTO_BACKUP_KEEP: ${ATLAS_AUTO_BACKUP_KEEP:-}
     volumes:
       - atlas-db:/app/data
       - atlas-uploads:/app/uploads

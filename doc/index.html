@@ -495,6 +495,16 @@ node server.js</code></pre>
       <pre><code>cd server
 npm run backup</code></pre>
       <p>Копия с меткой времени появится в папке <code>backups/</code>.</p>
+      <p><strong>Автоматические бэкапы по расписанию</strong> — по умолчанию выключены
+      (только ручные способы выше). Включаются переменной окружения
+      <code>ATLAS_AUTO_BACKUP=1</code> (в <code>.env</code> при Docker-развёртывании, см.
+      <code>.env.example</code>, либо в окружении процесса при обычном запуске). Бэкап
+      базы (без файлов — тот же принцип, что у ручного «Скачать базу») снимается раз в
+      сутки в заданный час (<code>ATLAS_AUTO_BACKUP_HOUR</code>, по умолчанию 3 — ночь по
+      времени сервера), хранится последние <code>ATLAS_AUTO_BACKUP_KEEP</code> копий
+      (по умолчанию 14, старые удаляются автоматически) — файлы кладутся в тот же
+      <code>backups/</code>, с именем вида <code>atlas-auto-backup-*.db</code>, отдельно
+      от ручных бэкапов и pre-restore снимков, которые ротация не трогает.</p>
     </section>
 
     <section id="import-export">
