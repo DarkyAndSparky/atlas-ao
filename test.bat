@@ -14,6 +14,7 @@ if not exist node_modules (
   call npm install
   if errorlevel 1 (
     echo Установка зависимостей сервера не удалась.
+    cd ..
     pause
     exit /b 1
   )
