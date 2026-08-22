@@ -1,6 +1,6 @@
 /* ====================== VIEW ENTRY ====================== */
 function openDetail(id, locId=null){
-  if(state.view==='map' || state.view==='wiki') state.returnView = state.view;
+  if(state.view==='map' || state.view==='wiki' || state.view==='sources') state.returnView = state.view;
   state.view = locId? 'location':'detail';
   state.currentId = id;
   state.currentLocId = locId;
@@ -9,6 +9,7 @@ function openDetail(id, locId=null){
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
+  document.getElementById('sourcesView').classList.remove('show');
   detailView.classList.add('show');
   renderDetail();
   renderTray();
@@ -63,6 +64,7 @@ function renderDetail(){
             <button class="add-location editor-hidden" id="addLocBtn">+ Добавить локацию</button>
           </div>
           <div class="section" id="relatedSection"></div>
+          <div class="section" id="sourcesSection"></div>
         </div>
         <div>
           <div class="section-label">Сведения</div>
@@ -87,6 +89,7 @@ function renderDetail(){
   renderLocationMiniMap(item);
   renderLocations(item);
   renderRelated(item);
+  renderEntitySources(document.getElementById('sourcesSection'), 'allod', item.id);
   renderIconControl(item);
   renderProjectControl(item);
   if(state.editorOn) document.getElementById('addLocBtn').classList.remove('editor-hidden');

@@ -69,6 +69,7 @@ function showAbout(){
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
+  document.getElementById('sourcesView').classList.remove('show');
   document.getElementById('aboutView').classList.add('show');
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.remove('active'));
   trayEl.classList.remove('show');

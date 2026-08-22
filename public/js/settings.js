@@ -79,10 +79,25 @@ function setTheme(theme){
   }
   applyAccentColor();
   if(state.view === 'config') renderConfigPanel();
+  updateThemeQuickToggleIcon();
 }
+
+// Публичная кнопка-иконка в шапке — доступна всем посетителям сразу, не
+// только через «⚙ Настройки» (которая вообще только для admin). Простое
+// переключение светлая/тёмная — вариант "авто" (по системе) остаётся
+// доступен в полной панели настроек для тех, кому он нужен.
+function updateThemeQuickToggleIcon(){
+  const btn = document.getElementById('themeQuickToggle');
+  if(!btn) return;
+  btn.textContent = isDarkActive() ? '🌙' : '☀️';
+}
+document.getElementById('themeQuickToggle').addEventListener('click', ()=>{
+  setTheme(isDarkActive() ? 'light' : 'dark');
+});
+updateThemeQuickToggleIcon();
 if(window.matchMedia){
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
-    if(!getStoredTheme()) applyAccentColor(); // только если тема не выбрана вручную
+    if(!getStoredTheme()){ applyAccentColor(); updateThemeQuickToggleIcon(); } // только если тема не выбрана вручную
   });
 }
 
@@ -117,6 +132,7 @@ function showConfig(){
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
+  document.getElementById('sourcesView').classList.remove('show');
   document.getElementById('configView').classList.add('show');
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.remove('active'));
   trayEl.classList.remove('show');

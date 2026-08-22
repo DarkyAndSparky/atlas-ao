@@ -55,6 +55,14 @@ router.delete('/allods/:id', requireAuth, (req, res)=>{
     db.prepare(`DELETE FROM gallery WHERE owner_type='location' AND owner_id IN (${placeholders})`).run(...locIds);
   }
   db.prepare('DELETE FROM locations WHERE allod_id=?').run(allod.id); // на всякий случай, хоть FK и каскадит
+  // source_refs не через FK на allods/locations (entity_type/entity_id —
+  // не настоящий внешний ключ, см. комментарий в db.js), поэтому каскад
+  // руками, как и с gallery выше
+  db.prepare("DELETE FROM source_refs WHERE entity_type='allod' AND entity_id=?").run(allod.id);
+  if(locIds.length){
+    const locPlaceholders = locIds.map(()=>'?').join(',');
+    db.prepare(`DELETE FROM source_refs WHERE entity_type='location' AND entity_id IN (${locPlaceholders})`).run(...locIds);
+  }
   db.prepare('DELETE FROM allods WHERE id=?').run(allod.id);
   res.json({ ok: true });
 });
@@ -136,6 +144,7 @@ router.delete('/locations/:id', requireAuth, (req, res)=>{
   const gals = db.prepare("SELECT url FROM gallery WHERE owner_type='location' AND owner_id=?").all(loc.id);
   gals.forEach(g=> deleteUploadedFile(g.url));
   db.prepare("DELETE FROM gallery WHERE owner_type='location' AND owner_id=?").run(loc.id);
+  db.prepare("DELETE FROM source_refs WHERE entity_type='location' AND entity_id=?").run(loc.id);
   db.prepare('DELETE FROM locations WHERE id=?').run(loc.id);
   res.json(fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(loc.allod_id)));
 });

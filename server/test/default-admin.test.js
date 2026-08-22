@@ -101,6 +101,36 @@ test('нельзя удалить дефолтный admin, пока это ед
   assert.equal(stillThere.status, 200);
 });
 
+test('форс-смена пароля (must_change_password=1) НЕ требует текущий пароль — сессия уже аутентифицирована', async ()=>{
+  const admin = makeClient();
+  await admin.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await admin.post('/api/auth/register', { username: 'forced-user', password: 'temp-password-1' }); // роль по умолчанию editor, must_change_password=1
+
+  const c = makeClient();
+  await c.post('/api/auth/login', { username: 'forced-user', password: 'temp-password-1' });
+  assert.equal((await c.get('/api/auth/status')).data.mustChangePassword, true);
+
+  // currentPassword вообще не передаём — должно пройти, раз идёт форс-смена
+  const change = await c.post('/api/auth/password', { newPassword: 'brand-new-password-1' });
+  assert.equal(change.status, 200);
+  assert.equal((await c.get('/api/auth/status')).data.mustChangePassword, false);
+
+  const relogin = await makeClient().post('/api/auth/login', { username: 'forced-user', password: 'brand-new-password-1' });
+  assert.equal(relogin.status, 200);
+});
+
+test('обычная (не форс) смена пароля по-прежнему требует верный currentPassword', async ()=>{
+  // 'forced-user' из предыдущего теста уже сменил пароль — must_change_password теперь 0
+  const c = makeClient();
+  await c.post('/api/auth/login', { username: 'forced-user', password: 'brand-new-password-1' });
+
+  const wrongCurrent = await c.post('/api/auth/password', { currentPassword: 'totally-wrong', newPassword: 'yet-another-password-1' });
+  assert.equal(wrongCurrent.status, 401);
+
+  const correctCurrent = await c.post('/api/auth/password', { currentPassword: 'brand-new-password-1', newPassword: 'yet-another-password-1' });
+  assert.equal(correctCurrent.status, 200);
+});
+
 test('смена пароля дефолтного admin снимает mustChangePassword', async ()=>{
   const c = makeClient();
   await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
@@ -151,10 +181,11 @@ test('после удаления дефолтного admin сайт снова
   const c = makeClient();
   await c.post('/api/auth/login', { username: 'second-admin', password: 'second-admin-pass1' });
   const users = await c.get('/api/auth/users');
-  assert.equal(users.data.length, 1, 'должен остаться только второй admin — дефолтный удалён в прошлом тесте');
+  const admins = users.data.filter(u=>u.role==='admin');
+  assert.equal(admins.length, 1, 'должен остаться только один admin — дефолтный удалён в прошлом тесте');
+  assert.equal(admins[0].username, 'second-admin');
 
-  const onlyLeft = users.data[0];
-  const del = await c.del('/api/auth/users/'+onlyLeft.id);
+  const del = await c.del('/api/auth/users/'+admins[0].id);
   assert.equal(del.status, 400);
   assert.match(del.data.error, /последнего оставшегося/);
 });

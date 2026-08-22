@@ -43,6 +43,11 @@ services:
     depends_on:
       app:
         condition: service_healthy
+    # Порты намеренно фиксированы на 80/443, не переменные — Let's Encrypt
+    # (HTTP-01/TLS-ALPN-01) проверяет владение доменом, обращаясь снаружи
+    # именно на них; на кастомных портах автовыпуск сертификата не сработает.
+    # Нужен HTTPS на других портах локально без домена — см.
+    # docker-compose.local.yml (порты 9311/9312, самоподписанный сертификат).
     ports:
       - "80:80"
       - "443:443"
@@ -57,7 +62,6 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-
 volumes:
   atlas-db:
   atlas-uploads:

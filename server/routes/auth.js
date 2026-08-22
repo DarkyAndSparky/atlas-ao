@@ -167,8 +167,15 @@ router.post('/password', requireAuth, async (req, res, next)=>{
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
     if(!user) return res.status(404).json({ error: 'Аккаунт не найден.' });
     const { currentPassword, newPassword } = req.body;
-    if(!(await verifyPassword(currentPassword || '', user.salt, user.hash))){
-      return res.status(401).json({ error: 'Текущий пароль указан неверно.' });
+    // при ОБЯЗАТЕЛЬНОЙ смене пароля (must_change_password) текущий пароль не
+    // спрашиваем — человек его только что ввёл при входе секунду назад,
+    // повторный запрос той же строки — лишнее трение, не дополнительная
+    // защита (сессия уже полностью аутентифицирована). Для добровольной
+    // смены пароля из настроек — как и раньше, текущий пароль обязателен.
+    if(!user.must_change_password){
+      if(!(await verifyPassword(currentPassword || '', user.salt, user.hash))){
+        return res.status(401).json({ error: 'Текущий пароль указан неверно.' });
+      }
     }
     if(!newPassword || newPassword.length < 8){
       return res.status(400).json({ error: 'Новый пароль должен быть не короче 8 символов.' });

@@ -27,6 +27,7 @@
     <div class="view-toggle" id="viewToggle">
       <button class="view-toggle-btn active" data-view="map">🗺️ Карта</button>
       <button class="view-toggle-btn" data-view="wiki">📖 Атлас островов</button>
+      <button class="view-toggle-btn" data-view="sources">🔗 Источники</button>
     </div>
     <div id="searchWrap">
       <input id="searchbox" type="text" placeholder="Поиск аллода…" autocomplete="off">
@@ -39,6 +40,7 @@
     <div class="spacer"></div>
     <input type="file" id="importInput" accept="application/json" style="display:none">
     <input type="file" id="restoreDbInput" accept=".db" style="display:none">
+    <button id="themeQuickToggle" type="button" title="Сменить тему оформления">🌗</button>
     <button id="editorToggle">Редактор</button>
     <button class="btn" id="authBtn">Войти</button>
     <button class="btn" id="configBtn" style="display:none;">⚙ Настройки</button>
@@ -66,7 +68,6 @@
       <div class="am-sub">Этот аккаунт использует временный пароль (например, дефолтный
       <code>admin0000</code>, или пароль, который для вас задал администратор) — прежде чем
       продолжить, задайте свой собственный.</div>
-      <input type="password" id="fpCurrent" placeholder="Текущий (временный) пароль" autocomplete="off">
       <input type="password" id="fpNew" placeholder="Новый пароль (от 8 символов)" autocomplete="off">
       <input type="password" id="fpNew2" placeholder="Повторите новый пароль" autocomplete="off">
       <div class="am-err" id="fpErr"></div>
@@ -150,6 +151,7 @@
   </div>
 
   <div id="wikiView"></div>
+  <div id="sourcesView"></div>
 
   <div id="configView"></div>
 
@@ -192,6 +194,7 @@
 <script src="js/lightbox.js"></script>
 <script src="js/detailView.js"></script>
 <script src="js/wikiView.js"></script>
+<script src="js/sourcesView.js"></script>
 <script src="js/authUI.js"></script>
 <script src="js/annotations.js"></script>
 <script src="js/main.js"></script>

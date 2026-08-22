@@ -231,6 +231,21 @@ test('список редакторов виден только вошедшим
   assert.deepEqual(names, ['atlant', 'second-editor']);
 });
 
+// 'second-editor' был создан приглашением (не bootstrap), поэтому у него
+// must_change_password=1 — прежде чем тестировать ОБЫЧНУЮ (добровольную)
+// смену пароля с обязательной проверкой currentPassword, сначала проходим
+// разовую форс-смену (без currentPassword — так и задумано, см.
+// routes/auth.js), чтобы снять флаг и оказаться в режиме, который
+// проверяют тесты ниже.
+test('second-editor проходит обязательную форс-смену пароля (без currentPassword)', async ()=>{
+  const c = makeClient();
+  await c.post('/api/auth/login', { username: 'second-editor', password: 'anotherpassword1' });
+  assert.equal((await c.get('/api/auth/status')).data.mustChangePassword, true);
+  const r = await c.post('/api/auth/password', { newPassword: 'anotherpassword1' }); // тот же пароль — просто снимаем флаг
+  assert.equal(r.status, 200);
+  assert.equal((await c.get('/api/auth/status')).data.mustChangePassword, false);
+});
+
 test('смена собственного пароля: неверный текущий пароль -> 401', async ()=>{
   const c = makeClient();
   await c.post('/api/auth/login', { username: 'second-editor', password: 'anotherpassword1' });

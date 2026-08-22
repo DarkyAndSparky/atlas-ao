@@ -23,6 +23,7 @@ function showWiki(){
   detailView.classList.remove('show');
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
+  document.getElementById('sourcesView').classList.remove('show');
   document.getElementById('wikiView').classList.add('show');
   updateActiveFilterBar(); // раньше тут была безусловная .add('hidden') — активный
                             // фильтр, выставленный кликом по тегу, становился

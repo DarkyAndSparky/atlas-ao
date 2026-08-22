@@ -170,6 +170,35 @@ CREATE TABLE IF NOT EXISTS faction_icons (
 
 CREATE INDEX IF NOT EXISTS idx_locations_allod ON locations(allod_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_owner ON gallery(owner_type, owner_id);
+
+-- Источники (внешние ссылки — форумные темы, статьи, скриншоты официальных
+-- материалов и т.п.), на основе которых заполняется вики. Глобальный
+-- список, а не привязанный к project: одна и та же статья по лору может
+-- быть источником для аллодов из разных "проектов" (игровых версий) —
+-- дублировать запись под каждый project незачем.
+CREATE TABLE IF NOT EXISTS sources (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  url TEXT,
+  note TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+
+-- Привязка источника к конкретной сущности (аллоду, локации, будущим
+-- событиям хронологии) — многие-ко-многим: у одной статьи может быть
+-- несколько упоминаний по разным аллодам, у одного аллода — несколько
+-- источников. entity_type/entity_id не через FK (сущности разных типов
+-- живут в разных таблицах) — как entity_type в gallery.owner_type.
+CREATE TABLE IF NOT EXISTS source_refs (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  note TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_source_refs_source ON source_refs(source_id);
+CREATE INDEX IF NOT EXISTS idx_source_refs_entity ON source_refs(entity_type, entity_id);
 `);
 
 // миграция для баз, созданных до появления подписей к фото
@@ -351,6 +380,22 @@ if(!hasFactionIcons){
   const insertFac = db.prepare('INSERT INTO faction_icons (id, faction, icon_url, created_at) VALUES (?,?,?,?)');
   seedFactionIcons.forEach(f=> insertFac.run(f.id, f.faction, '/assets/factions/'+f.file, Date.now()));
   console.log(`Засеяно иконок фракций: ${seedFactionIcons.length}`);
+}
+
+// стартовые записи в глобальном списке источников — ссылки, которыми уже
+// пользовались при заполнении лора (см. обсуждение роадмапа), чтобы раздел
+// "Источники" не был пустым с первого дня. Управляемая таблица — редакторы
+// добавляют/редактируют/удаляют через UI, это только отправная точка.
+const hasSources = db.prepare('SELECT id FROM sources LIMIT 1').get();
+if(!hasSources){
+  const seedSources = [
+    { id: 'src_dtf_universe_intro', title: 'Введение в историю вселенной Аллодов', url: 'https://dtf.ru/games/1130550-vvedenie-v-istoriyu-vselennoi-allodov' },
+    { id: 'src_forum_140056', title: 'Форум Allods.ru — тема 140056', url: 'https://forum.allods.ru/showthread.php?t=140056' },
+    { id: 'src_forum_57641', title: 'Форум Allods.ru — тема 57641', url: 'https://forum.allods.ru/showthread.php?t=57641' },
+  ];
+  const insertSrc = db.prepare('INSERT INTO sources (id, title, url, note, created_at) VALUES (?,?,?,?,?)');
+  seedSources.forEach(s=> insertSrc.run(s.id, s.title, s.url, '', Date.now()));
+  console.log(`Засеяно источников: ${seedSources.length}`);
 }
 
 // гарантируем, что строка настроек сайта всегда есть (id=1, singleton)

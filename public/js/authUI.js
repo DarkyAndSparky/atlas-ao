@@ -127,36 +127,54 @@ document.getElementById('editorToggle').addEventListener('click', ()=>{
    пароль не сам пользователь — see routes/auth.js). */
 const forcePassOverlay = document.getElementById('forcePassOverlay');
 const fpErr = document.getElementById('fpErr');
+// поля модалки в порядке обхода Tab — используются и для фокус-ловушки, и
+// для установки начального фокуса
+const fpFocusable = ['fpNew', 'fpNew2', 'fpSubmit'].map(id=>document.getElementById(id));
 
 function updateForcePasswordUI(){
   if(authStatus.loggedIn && authStatus.mustChangePassword){
-    document.getElementById('fpCurrent').value = '';
     document.getElementById('fpNew').value = '';
     document.getElementById('fpNew2').value = '';
     fpErr.textContent = '';
     forcePassOverlay.classList.add('show');
-    setTimeout(()=> document.getElementById('fpCurrent').focus(), 50);
+    setTimeout(()=> document.getElementById('fpNew').focus(), 50);
   }else{
     forcePassOverlay.classList.remove('show');
   }
 }
 
+// Ловушка фокуса: пока форма открыта, Tab/Shift+Tab не должны уходить на
+// элементы позади оверлея (без этого фокус утекал на кнопки в шапке под
+// затемнением, и было видно, как они подсвечиваются на фоне). Слушаем
+// keydown на самом document, но действуем только пока оверлей реально
+// показан — так не нужно навешивать/снимать обработчик всякий раз.
+document.addEventListener('keydown', e=>{
+  if(e.key !== 'Tab' || !forcePassOverlay.classList.contains('show')) return;
+  const first = fpFocusable[0], last = fpFocusable[fpFocusable.length-1];
+  if(e.shiftKey && document.activeElement === first){
+    e.preventDefault(); last.focus();
+  }else if(!e.shiftKey && document.activeElement === last){
+    e.preventDefault(); first.focus();
+  }else if(!fpFocusable.includes(document.activeElement)){
+    // фокус каким-то образом оказался вне модалки (например, автофокус
+    // браузера) — возвращаем на первое поле вместо того, чтобы блуждать по фону
+    e.preventDefault(); first.focus();
+  }
+});
+
 async function submitForcePasswordChange(){
-  const current = document.getElementById('fpCurrent').value;
   const p1 = document.getElementById('fpNew').value;
   const p2 = document.getElementById('fpNew2').value;
-  if(!current){ fpErr.textContent = 'Введите текущий пароль.'; return; }
   if(p1.length < 8){ fpErr.textContent = 'Новый пароль должен быть не короче 8 символов.'; return; }
   if(p1 !== p2){ fpErr.textContent = 'Пароли не совпадают.'; return; }
-  if(p1 === current){ fpErr.textContent = 'Новый пароль должен отличаться от текущего.'; return; }
   try{
-    await api('/auth/password', { method:'POST', body:{ currentPassword: current, newPassword: p1 } });
+    await api('/auth/password', { method:'POST', body:{ newPassword: p1 } });
     toast('Пароль изменён');
     await updateAuthUI(); // authStatus.mustChangePassword теперь false — оверлей скроется сам
   }catch(e){ fpErr.textContent = e.message; }
 }
 document.getElementById('fpSubmit').addEventListener('click', submitForcePasswordChange);
-[document.getElementById('fpCurrent'), document.getElementById('fpNew'), document.getElementById('fpNew2')].forEach(inp=>
+[document.getElementById('fpNew'), document.getElementById('fpNew2')].forEach(inp=>
   inp.addEventListener('keydown', e=>{ if(e.key==='Enter') submitForcePasswordChange(); })
 );
 // намеренно НЕТ обработчика клика по фону (mousedown на forcePassOverlay) —

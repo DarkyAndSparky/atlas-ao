@@ -1,0 +1,35 @@
+{
+	# Локальный HTTPS с самоподписанным сертификатом — без домена и без
+	# Let's Encrypt. Caddy при первом старте сам создаёт локальный CA и
+	# выпускает сертификат на лету для любого хоста, на который придёт
+	# запрос — поэтому одинаково открывается и https://localhost:9311,
+	# и https://<IP-в-локальной-сети>:9311 (например, с телефона).
+	# Браузер предупредит про "непроверенный сертификат" — это ожидаемо
+	# для самоподписанного, см. README.
+	auto_https off
+}
+
+# HTTP -> HTTPS редирект. {http.request.host} — хост из запроса БЕЗ порта:
+# так редирект работает что для localhost, что для IP в локалке, не
+# хардкодим конкретное имя/адрес.
+http://:{$ATLAS_HTTP_REDIRECT_PORT:-9312} {
+	redir https://{http.request.host}:{$ATLAS_HTTPS_PORT:-9311}{uri} permanent
+}
+
+https://:{$ATLAS_HTTPS_PORT:-9311} {
+	tls internal
+
+	reverse_proxy app:4173
+
+	encode gzip zstd
+
+	# статику отдаём с длинным кэшем — сам сервер версионирует /uploads по хэшу
+	# в имени файла, а public/* пересобирается вместе с образом при деплое
+	@static path *.js *.css *.png *.jpg *.jpeg *.webp *.svg *.woff2
+	header @static Cache-Control "public, max-age=604800"
+
+	log {
+		output stdout
+		format console
+	}
+}

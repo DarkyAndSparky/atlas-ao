@@ -71,6 +71,60 @@ test.describe('Векторный слой рисования на карте', 
     expect(after).toBe(0);
   });
 
+  test('стрелка: наконечник указывает на конечную точку, а не улетает за неё', async ({ page })=>{
+    // Регрессия: раньше половинный угол раствора наконечника считался от
+    // "прямого" направления линии почти развёрнутым (~147.6°), из-за чего
+    // оба крыла треугольника оказывались геометрически ВПЕРЕДИ конечной
+    // точки — наконечник визуально "убегал" за пределы стрелки вместо
+    // того, чтобы указывать на неё (см. annotations.js, arrowHeadPoints).
+    await gotoReady(page);
+    await loginAndEnableEditor(page);
+    await useIsolatedDrawingProject(page);
+
+    await page.click('.draw-tool[data-tool="arrow"]');
+    const canvas = page.locator('#mapCanvas');
+    const box = await canvas.boundingBox();
+    const start = { x: box.x + 100, y: box.y + 220 };
+    const end = { x: box.x + 300, y: box.y + 100 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x - 50, end.y + 40, { steps: 8 });
+    await page.mouse.move(end.x, end.y, { steps: 8 });
+    await page.mouse.up();
+
+    const arrowGroup = page.locator('#annotLayer g.annot-el');
+    await expect(arrowGroup).toHaveCount(1, { timeout: 5000 });
+
+    const geom = await arrowGroup.evaluate(g => {
+      const line = g.querySelector('line');
+      const head = g.querySelector('polygon');
+      const [tipStr, ...wingStrs] = head.getAttribute('points').trim().split(/\s+/);
+      const [tipX, tipY] = tipStr.split(',').map(Number);
+      const wings = wingStrs.map(s => s.split(',').map(Number));
+      return {
+        x1: Number(line.getAttribute('x1')), y1: Number(line.getAttribute('y1')),
+        x2: Number(line.getAttribute('x2')), y2: Number(line.getAttribute('y2')),
+        tipX, tipY, wings,
+      };
+    });
+
+    // остриё наконечника должно совпадать с концом линии (куда отпустили мышь)
+    expect(Math.abs(geom.tipX - geom.x2)).toBeLessThan(1);
+    expect(Math.abs(geom.tipY - geom.y2)).toBeLessThan(1);
+
+    // оба "крыла" треугольника должны лежать БЛИЖЕ к началу линии, чем
+    // остриё — то есть проекция крыла на направление линии должна быть
+    // МЕНЬШЕ проекции острия. Если крыло уходит вперёд (как в баге),
+    // проекция окажется больше проекции острия.
+    const dirX = geom.x2 - geom.x1, dirY = geom.y2 - geom.y1;
+    const dirLen = Math.hypot(dirX, dirY);
+    const proj = (px, py) => ((px - geom.x1) * dirX + (py - geom.y1) * dirY) / dirLen;
+    const tipProj = proj(geom.tipX, geom.tipY);
+    for (const [wx, wy] of geom.wings) {
+      expect(proj(wx, wy)).toBeLessThan(tipProj);
+    }
+  });
+
   test('прямоугольник и круг рисуются перетаскиванием', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);

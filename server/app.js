@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const { getSessionSecret } = require('./config');
 const SqliteSessionStore = require('./sessionStore');
@@ -12,7 +13,9 @@ const settingsRouter = require('./routes/settings');
 const annotationsRouter = require('./routes/annotations');
 const decorationsRouter = require('./routes/decorations');
 const factionsRouter = require('./routes/factions');
+const sourcesRouter = require('./routes/sources');
 const { router: systemRouter } = require('./routes/system');
+const seoRouter = require('./routes/seo');
 const { UPLOAD_DIR } = require('./upload');
 
 require('./db'); // инициализирует (и при первом запуске засеивает) базу до старта сервера
@@ -75,6 +78,24 @@ function createApp(){
 
   app.get('/api/health', (req, res)=> res.json({ ok: true }));
 
+  // Общий rate limit на API — защита от примитивного скрапинга/DoS, не мешает
+  // обычному использованию сайта. Логин защищён отдельно, гораздо строже
+  // (security/rateLimiter.js, по попыткам, а не по времени) — этот лимитер его
+  // не заменяет, а накрывает всё остальное API, включая сам логин-эндпоинт как
+  // дополнительный слой. /api/health исключён, чтобы внешний аптайм-мониторинг
+  // (UptimeRobot и т.п.) не словил 429 на частых пингах.
+  // Лимит настраивается через ATLAS_RATE_LIMIT_MAX (запросов за ATLAS_RATE_LIMIT_WINDOW_MS,
+  // по умолчанию 300/мин) — тестам нужен маленький лимит, чтобы не слать сотни запросов.
+  const apiLimiter = rateLimit({
+    windowMs: Number(process.env.ATLAS_RATE_LIMIT_WINDOW_MS) || 60 * 1000,
+    max: Number(process.env.ATLAS_RATE_LIMIT_MAX) || 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req)=> req.path === '/api/health',
+    message: { error: 'Слишком много запросов, попробуйте позже.' },
+  });
+  app.use('/api', apiLimiter);
+
   app.use('/api/auth', authRouter);
   app.use('/api', allodsRouter);
   app.use('/api/backup', backupRouter);
@@ -82,7 +103,10 @@ function createApp(){
   app.use('/api', annotationsRouter);
   app.use('/api', decorationsRouter);
   app.use('/api', factionsRouter);
+  app.use('/api', sourcesRouter);
   app.use('/api/system', systemRouter);
+
+  app.use(seoRouter);
 
   app.use('/uploads', express.static(UPLOAD_DIR));
   app.use(express.static(path.join(__dirname, '..', 'public')));

@@ -1,14 +1,24 @@
-# Локальный запуск в Docker БЕЗ домена, БЕЗ Caddy, БЕЗ HTTPS — просто чтобы
-# попробовать Docker-режим или погонять на своей машине через обычный
-# http://localhost:4173. Для реальной публикации с HTTPS используйте
-# docker-compose.yml (там же объяснение) — этот файл для того не годится,
-# в нём осознанно нет TLS/secure-кук/reverse-proxy.
+# Локальный запуск в Docker — HTTPS на самоподписанном сертификате, без
+# домена и без Let's Encrypt. HTTPS — базовый минимум даже для локалки:
+# HTTP-порт тоже открыт (иначе набранный руками "http://" молча не грузился
+# бы), но только чтобы редиректнуть на HTTPS, ходить по нему самому не
+# нужно. Порты настраиваются через .env (см. .env.example), по умолчанию
+# 9311 (HTTPS) и 9312 (HTTP-редирект).
+#
+# Для настоящей публикации в интернете с автоматическим Let's Encrypt
+# используйте docker-compose.yml — он держит Caddy на стандартных 80/443:
+# Let's Encrypt проверяет владение доменом именно на них снаружи, на
+# кастомных портах 9311/9312 автовыпуск сертификата не сработает.
 #
 # Запуск:
 #   docker compose -f docker-compose.local.yml up -d --build
+# Открыть: https://localhost:9311 (или https://<IP-в-локалке>:9311, тот же
+# сертификат работает и по IP — например, зайти с телефона в той же Wi-Fi).
+# Браузер предупредит про самоподписанный сертификат — это ожидаемо,
+# жмите «продолжить»/добавьте исключение.
 # Остановка:
 #   docker compose -f docker-compose.local.yml down
-# (добавьте -v к down, если нужно ещё и стереть базу/загрузки/бэкапы)
+# (добавьте -v, если нужно ещё и стереть базу/загрузки/бэкапы)
 
 services:
   app:
@@ -26,12 +36,16 @@ services:
       # пока не пересоздадите том atlas-db; для чего-то серьёзнее задайте
       # свой через переменную окружения SESSION_SECRET перед запуском
       SESSION_SECRET: ${SESSION_SECRET:-local-dev-secret-change-me-1234567890}
+      # сервер стоит за Caddy (см. Caddyfile.local) — доверяем X-Forwarded-*
+      # и включаем secure-куки, иначе логин по HTTPS не сохранит сессию
+      ATLAS_TRUST_PROXY: "1"
+      ATLAS_HTTPS: "1"
     volumes:
       - atlas-db:/app/data
       - atlas-uploads:/app/uploads
       - atlas-backups:/app/backups
-    ports:
-      - "4173:4173"
+    expose:
+      - "4173"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/api/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -39,7 +53,26 @@ services:
       start_period: 15s
       retries: 3
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${ATLAS_HTTPS_PORT:-9311}:${ATLAS_HTTPS_PORT:-9311}"
+      - "${ATLAS_HTTP_REDIRECT_PORT:-9312}:${ATLAS_HTTP_REDIRECT_PORT:-9312}"
+    environment:
+      ATLAS_HTTPS_PORT: ${ATLAS_HTTPS_PORT:-9311}
+      ATLAS_HTTP_REDIRECT_PORT: ${ATLAS_HTTP_REDIRECT_PORT:-9312}
+    volumes:
+      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy-local-data:/data
+      - caddy-local-config:/config
+
 volumes:
   atlas-db:
   atlas-uploads:
   atlas-backups:
+  caddy-local-data:
+  caddy-local-config:

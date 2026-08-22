@@ -381,6 +381,7 @@ function showMap(){
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
+  document.getElementById('sourcesView').classList.remove('show');
   mapView.style.display='block';
   document.getElementById('zoomCtrl').style.display='flex';
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='map'));
@@ -413,6 +414,7 @@ document.getElementById('brand').addEventListener('click', showMap);
 document.querySelectorAll('.view-toggle-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     if(btn.dataset.view==='map') showMap();
+    else if(btn.dataset.view==='sources') showSources();
     else showWiki();
   });
 });

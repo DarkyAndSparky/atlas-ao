@@ -67,11 +67,17 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // маркер-дефиниция: маркеры в SVG плохо работают с произвольным цветом
 // на каждую фигуру отдельно (пришлось бы плодить <marker> под каждый цвет),
 // проще посчитать три точки треугольника руками.
+// half-angle — половина угла раствора наконечника от направления линии,
+// НЕ от обратного направления: маленький угол (~25-30°) даёт крылья,
+// уходящие назад к линии, что и нужно. Раньше здесь стоял Math.PI*0.82
+// (≈147.6°) — почти развёрнутый угол — из-за чего оба крыла оказывались
+// геометрически впереди конечной точки, и наконечник визуально "убегал"
+// за пределы стрелки вместо того, чтобы указывать на неё.
 function arrowHeadPoints(x1,y1,x2,y2,size){
   const angle = Math.atan2(y2-y1, x2-x1);
-  const spread = Math.PI*0.82;
-  const p1x = x2 - size*Math.cos(angle-spread), p1y = y2 - size*Math.sin(angle-spread);
-  const p2x = x2 - size*Math.cos(angle+spread), p2y = y2 - size*Math.sin(angle+spread);
+  const halfAngle = Math.PI*0.15;
+  const p1x = x2 - size*Math.cos(angle-halfAngle), p1y = y2 - size*Math.sin(angle-halfAngle);
+  const p2x = x2 - size*Math.cos(angle+halfAngle), p2y = y2 - size*Math.sin(angle+halfAngle);
   return `${x2},${y2} ${p1x},${p1y} ${p2x},${p2y}`;
 }
 
