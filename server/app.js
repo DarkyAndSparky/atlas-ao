@@ -14,6 +14,9 @@ const annotationsRouter = require('./routes/annotations');
 const decorationsRouter = require('./routes/decorations');
 const factionsRouter = require('./routes/factions');
 const sourcesRouter = require('./routes/sources');
+const timelineRouter = require('./routes/timeline');
+const archipelagosRouter = require('./routes/archipelagos');
+const searchRouter = require('./routes/search');
 const { router: systemRouter } = require('./routes/system');
 const seoRouter = require('./routes/seo');
 const { UPLOAD_DIR } = require('./upload');
@@ -23,9 +26,11 @@ require('./db'); // инициализирует (и при первом зап�
 function createApp(){
   const app = express();
 
-  // Если сервер стоит за реверс-прокси (Caddy/nginx в Docker-режиме, см. docker-compose.yml),
-  // ATLAS_TRUST_PROXY=1 включает express-session/req.ip корректную обработку X-Forwarded-*,
-  // иначе req.secure и rate-limit по IP работали бы неверно за прокси.
+  // По умолчанию сервер сам терминирует HTTPS (см. server/certs.js) — никакого
+  // реверс-прокси перед ним нет ни в одном штатном сценарии запуска. Флаг
+  // оставлен на случай, если кто-то всё же поставит свой nginx/Caddy перед
+  // сервером самостоятельно: ATLAS_TRUST_PROXY=1 включает корректную обработку
+  // X-Forwarded-* (иначе req.secure и rate-limit по IP работали бы неверно за прокси).
   if(process.env.ATLAS_TRUST_PROXY === '1') app.set('trust proxy', 1);
 
   const cspDirectives = {
@@ -48,7 +53,8 @@ function createApp(){
     // useDefaults:false — иначе helmet молча подмешивает свои дефолты поверх
     // cspDirectives и upgrade-insecure-requests возвращается, даже если он удалён ниже.
     contentSecurityPolicy: { useDefaults: false, directives: cspDirectives },
-    // HSTS имеет смысл только если сервер реально отдаётся по HTTPS (Docker-режим за Caddy).
+    // HSTS имеет смысл только если сервер реально отдаётся по HTTPS (ATLAS_HTTPS=1 — так
+    // выставляют себе сами start.sh/start.bat/docker-compose*.yml при нативном HTTPS).
     // Слать его поверх обычного http://localhost — не только бесполезно, но и опасно:
     // браузер запомнит домен как https-only и сломает доступ, если позже тот же хост
     // поднимут без TLS.
@@ -69,7 +75,7 @@ function createApp(){
     cookie: {
       httpOnly: true,
       sameSite: 'lax',
-      // secure-куки требуют HTTPS — в Docker-режиме за Caddy (см. ниже) это true;
+      // secure-куки требуют HTTPS — при нативном HTTPS (ATLAS_HTTPS=1, см. certs.js) это true;
       // при обычном локальном http://localhost оставляем false, иначе логин не заработает.
       secure: process.env.ATLAS_HTTPS === '1',
       maxAge: 1000*60*60*24*30,
@@ -104,6 +110,9 @@ function createApp(){
   app.use('/api', decorationsRouter);
   app.use('/api', factionsRouter);
   app.use('/api', sourcesRouter);
+  app.use('/api', timelineRouter);
+  app.use('/api', archipelagosRouter);
+  app.use('/api', searchRouter);
   app.use('/api/system', systemRouter);
 
   app.use(seoRouter);

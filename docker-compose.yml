@@ -1,3 +1,18 @@
+# Публикация с настоящим доменом и HTTPS-сертификатом. server.js сам
+# терминирует HTTPS (см. server/certs.js) — никакого Caddy/reverse-proxy
+# рядом, тот же механизм, что и в docker-compose.local.yml/start.sh, только
+# тут сертификат читается ГОТОВЫМ из ATLAS_CERT_FILE/ATLAS_KEY_FILE, а не
+# генерируется самоподписанным. Выпускает и продлевает сертификат внешний
+# certbot (на хосте или отдельным контейнером) — server.js про ACME/Let's
+# Encrypt ничего не знает, только читает PEM-файлы. Подробный порядок
+# действий — в README ("Публикация с настоящим HTTPS").
+#
+# Порты 80/443 — стандартные снаружи (иначе certbot HTTP-01-валидация не
+# сможет достучаться); внутри контейнера процесс слушает непривилегированные
+# 9311/9312 (см. Dockerfile — процесс не root), Docker сам транслирует
+# host-порт 80/443 в контейнерный — это нормально, привилегия нужна только
+# на стороне хоста, а её берёт на себя докер-демон.
+
 services:
   app:
     build:
@@ -6,7 +21,6 @@ services:
     image: atlas-allods:latest
     restart: unless-stopped
     environment:
-      PORT: 4173
       # /app/data и не /app — базу и uploads держим отдельно от кода в именованных
       # томах, чтобы `docker compose up --build` (пересборка образа) их не задевал.
       ATLAS_DB_PATH: /app/data/atlas.db
@@ -16,9 +30,17 @@ services:
       # файл server/.session-secret внутри контейнера, и он потеряется при
       # пересоздании контейнера (все залогиненные сессии слетят).
       SESSION_SECRET: ${SESSION_SECRET:?Задайте SESSION_SECRET в .env — см. .env.example}
-      # сервер стоит за Caddy (см. ниже) — доверяем X-Forwarded-* и включаем secure-куки
-      ATLAS_TRUST_PROXY: "1"
       ATLAS_HTTPS: "1"
+      ATLAS_NATIVE_HTTPS: "1"
+      ATLAS_HTTPS_PORT: 9311
+      ATLAS_HTTP_REDIRECT_PORT: 9312
+      # готовый сертификат от certbot — см. volumes ниже и README
+      ATLAS_CERT_FILE: /certs/fullchain.pem
+      ATLAS_KEY_FILE: /certs/privkey.pem
+      # сюда certbot (режим --webroot) кладёт файлы для HTTP-01-проверки —
+      # редирект-сервер (порт 9312 внутри) отдаёт их как есть, ДО редиректа
+      # на HTTPS, иначе выпуск/продление сертификата никогда не пройдёт
+      ATLAS_ACME_WEBROOT: /acme-webroot
       # автоматические бэкапы по расписанию — см. .env.example и server/backupScheduler.js;
       # необязательные, по умолчанию выключено (пустая ATLAS_AUTO_BACKUP != "1")
       ATLAS_AUTO_BACKUP: ${ATLAS_AUTO_BACKUP:-}
@@ -28,43 +50,23 @@ services:
       - atlas-db:/app/data
       - atlas-uploads:/app/uploads
       - atlas-backups:/app/backups
-    expose:
-      - "4173"
+      # смонтируйте сюда fullchain.pem/privkey.pem, которые выпустил certbot
+      # на хосте (обычно /etc/letsencrypt/live/<домен>/) — read-only,
+      # server.js их только читает, никогда не пишет
+      - ${ATLAS_CERTS_HOST_DIR:-./certs}:/certs:ro
+      # webroot certbot'а для HTTP-01-валидации/продления (см. комментарий выше)
+      - ${ATLAS_ACME_WEBROOT_HOST_DIR:-./acme-webroot}:/acme-webroot:ro
+    ports:
+      - "80:9312"
+      - "443:9311"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/api/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('https').get({hostname:'127.0.0.1',port:process.env.ATLAS_HTTPS_PORT||9311,path:'/api/health',rejectUnauthorized:false},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 15s
       retries: 3
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      app:
-        condition: service_healthy
-    # Порты намеренно фиксированы на 80/443, не переменные — Let's Encrypt
-    # (HTTP-01/TLS-ALPN-01) проверяет владение доменом, обращаясь снаружи
-    # именно на них; на кастомных портах автовыпуск сертификата не сработает.
-    # Нужен HTTPS на других портах локально без домена — см.
-    # docker-compose.local.yml (порты 9311/9312, самоподписанный сертификат).
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      # домен и e-mail для автоматического выпуска Let's Encrypt-сертификата.
-      # Нужен настоящий домен с DNS, указывающим на этот сервер, и открытые
-      # наружу порты 80/443. Для локальной проверки без домена и без Caddy —
-      # используйте docker-compose.local.yml вместо этого файла (см. README).
-      ATLAS_DOMAIN: ${ATLAS_DOMAIN:?Задайте ATLAS_DOMAIN в .env, напр. atlas.example.com}
-      ATLAS_ACME_EMAIL: ${ATLAS_ACME_EMAIL:-}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
 volumes:
   atlas-db:
   atlas-uploads:
   atlas-backups:
-  caddy-data:
-  caddy-config:

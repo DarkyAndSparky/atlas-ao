@@ -67,16 +67,29 @@ router.delete('/allods/:id', requireAuth, (req, res)=>{
   res.json({ ok: true });
 });
 
-const ALLOD_FIELDS = ['name','climate','size','holder','faction','hasMap','type','category','plot','expansion','archipelago','description','history','mapX','mapY','location_map_url','icon_url','project'];
+const ALLOD_FIELDS = ['name','climate','size','holder','faction','hasMap','type','category','plot','expansion','archipelago','description','history','mapX','mapY','location_map_url','icon_url','project','year_appeared','year_disappeared'];
 router.patch('/allods/:id', requireAuth, (req, res)=>{
   const row = db.prepare('SELECT * FROM allods WHERE id=?').get(req.params.id);
   if(!row) return res.status(404).json({ error: 'Не найдено' });
   if('name' in req.body && !(req.body.name||'').trim()){
     return res.status(400).json({ error: 'Название острова не может быть пустым.' });
   }
+  // year_appeared/year_disappeared — целое число или null (сбросить статус
+  // "уничтожен"/убрать год появления). "Уничтожен" сейчас — это просто факт
+  // того, что year_disappeared задан; когда появится слайдер динамики, он
+  // будет сравнивать со своим текущим годом вместо голого наличия значения.
+  for(const f of ['year_appeared','year_disappeared']){
+    if(f in req.body && req.body[f] !== null && req.body[f] !== ''){
+      const n = Number(req.body[f]);
+      if(!Number.isInteger(n)) return res.status(400).json({ error: 'Год должен быть целым числом' });
+    }
+  }
   const updates = {};
   ALLOD_FIELDS.forEach(f=>{ if(f in req.body) updates[f] = req.body[f]; });
   if('name' in updates) updates.name = updates.name.trim();
+  for(const f of ['year_appeared','year_disappeared']){
+    if(f in updates) updates[f] = (updates[f] === '' || updates[f] === undefined) ? null : (updates[f]===null ? null : Number(updates[f]));
+  }
   if(Object.keys(updates).length===0) return res.json(fullAllod(row));
   if('hasMap' in updates) updates.hasMap = updates.hasMap ? 1 : 0;
   // icon_url/location_map_url можно сменить на другую ссылку или очистить —

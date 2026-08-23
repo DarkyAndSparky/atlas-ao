@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { gotoReady } = require('../helpers');
+const { gotoReady, loginAndEnableEditor } = require('../helpers');
 
 test.describe('Глобальная карта', ()=>{
 
@@ -113,4 +113,27 @@ test.describe('Глобальная карта', ()=>{
     await expect(page.locator('.marker.pinging')).toHaveCount(0);
   });
 
+});
+
+test.describe('Уничтоженные острова', ()=>{
+  test('год исчезновения показывает баннер на странице острова и приглушает его маркер на карте', async ({ page })=>{
+    await gotoReady(page);
+    await loginAndEnableEditor(page);
+
+    // берём остров, уже размещённый на карте, чтобы потом найти его маркер
+    await page.click('[data-view="map"]');
+    const marker = page.locator('.marker').first();
+    const allodId = await marker.getAttribute('data-id');
+    await marker.click();
+    await expect(page.locator('#detailView')).toHaveClass(/show/);
+
+    page.once('dialog', d => d.accept('1200'));
+    await page.locator('.sidebar-fact[data-field="year_disappeared"]').click();
+    await expect(page.locator('.destroyed-banner')).toContainText('1200');
+
+    await page.click('[data-view="map"]');
+    const markerAfter = page.locator(`.marker[data-id="${allodId}"]`);
+    await expect(markerAfter).toHaveClass(/destroyed/);
+    await expect(markerAfter.locator('.destroyed-badge')).toBeVisible();
+  });
 });

@@ -11,11 +11,11 @@ async function boot(){
   initFilterSelects();
   state.cam = centeredCamera(0.72);
   applyCamera();
+  await loadFactionIcons(); // до renderMarkers() — иначе бейджи рас не отрисуются при первой загрузке (factionIconFor читает уже загруженный список)
   renderMarkers();
   renderTray();
   await loadAnnotations();
   await loadDecorations();
-  await loadFactionIcons();
   await loadSiteSettings();
   await updateAuthUI();
   loadPublicSystemInfo();
@@ -70,6 +70,8 @@ function showAbout(){
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
   document.getElementById('sourcesView').classList.remove('show');
+  document.getElementById('timelineView').classList.remove('show');
+  document.getElementById('archipelagosView').classList.remove('show');
   document.getElementById('aboutView').classList.add('show');
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.remove('active'));
   trayEl.classList.remove('show');

@@ -40,6 +40,7 @@ function renderProjectSwitcher(){
   wrap.querySelectorAll('.project-tab').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       setCurrentProject(btn.dataset.project);
+      if(typeof clearMapSelection==='function') clearMapSelection(); // иначе панель "Собрать в архипелаг" осталась бы висеть с id островов из другого проекта
       renderProjectSwitcher();
       state.filters = { category:'', faction:'', q:'', archipelago:'', climate:'', size:'' };
       document.getElementById('catFilter').value='';

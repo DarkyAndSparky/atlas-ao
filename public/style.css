@@ -143,6 +143,13 @@ body{
 }
 .sr-badge.unplaced{border-color:var(--imperial);color:var(--imperial);}
 .sr-empty{padding:14px 12px;font-size:12px;color:var(--parchment-dim);font-style:italic;}
+.sr-fts-status{padding:8px 12px;font-size:11px;color:var(--parchment-dim);font-style:italic;}
+.sr-fts-divider{
+  padding:8px 12px 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;
+  color:var(--parchment-dim);border-top:1px solid var(--line);margin-top:4px;
+}
+.sr-item-fts .sr-snippet{font-size:11px;color:var(--parchment-dim);margin-top:3px;line-height:1.4;}
+.sr-item-fts .sr-snippet mark{background:rgba(201,162,75,0.35);color:var(--gold-bright);border-radius:2px;padding:0 1px;}
 
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:1;min-width:0;}
 .filters select{
@@ -314,6 +321,75 @@ body{
 .marker:hover[data-fac="Лигийский аллод"] .dot{filter:drop-shadow(0 0 9px var(--ligue));}
 .marker:hover[data-fac="Эльфийский аллод"] .dot{filter:drop-shadow(0 0 9px var(--elf));}
 .marker:hover[data-fac="Нейтральный аллод"] .dot{filter:drop-shadow(0 0 9px var(--neutral));}
+/* подсветка по политической фракции — через тот же нормализованный класс,
+   что и facClass() для тегов (устойчиво к вариациям текста типа "Имперский
+   аллод"/"Имперская фракция"), а не хрупкое совпадение точной строки выше.
+   Старые [data-fac="..."]-правила оставлены для обратной совместимости с
+   местами, где data-fac ещё не заменён на класс. Красим и свечение иконки,
+   и само название — раньше подпись вообще не красилась. */
+.marker.fac-Имперский .dot{filter:drop-shadow(0 0 5px var(--imperial));}
+.marker.fac-Лигийский .dot{filter:drop-shadow(0 0 5px var(--ligue));}
+.marker.fac-Эльфийский .dot{filter:drop-shadow(0 0 5px var(--elf));}
+.marker.fac-Нейтральный .dot{filter:drop-shadow(0 0 5px var(--neutral));}
+.marker:hover.fac-Имперский .dot{filter:drop-shadow(0 0 9px var(--imperial));}
+.marker:hover.fac-Лигийский .dot{filter:drop-shadow(0 0 9px var(--ligue));}
+.marker:hover.fac-Эльфийский .dot{filter:drop-shadow(0 0 9px var(--elf));}
+.marker:hover.fac-Нейтральный .dot{filter:drop-shadow(0 0 9px var(--neutral));}
+.marker.fac-Имперский .lbl{color:var(--imperial);border-color:var(--imperial);}
+.marker.fac-Лигийский .lbl{color:var(--ligue);border-color:var(--ligue);}
+.marker.fac-Эльфийский .lbl{color:var(--elf);border-color:var(--elf);}
+.marker.fac-Нейтральный .lbl{color:var(--neutral);border-color:var(--neutral);}
+
+/* бейдж расы (Хадаган/Кания/...) поверх маркера — независимый слой от
+   политической подсветки выше: одно про "за кого остров", другое про "чей
+   народ его населяет". Иконки берутся из faction_icons (см. settings.js
+   factionIconFor), раньше на карте не отображались вообще. */
+.marker .race-badge{
+  position:absolute;bottom:-3px;right:-3px;width:13px;height:13px;
+  border-radius:50%;background:var(--void-0);border:1px solid var(--line);
+  overflow:hidden;display:flex;align-items:center;justify-content:center;
+}
+.marker .race-badge img{width:100%;height:100%;object-fit:cover;}
+
+/* остров уничтожен (year_disappeared задан) — приглушаем и перекрываем
+   фракционную подсветку выше (идёт позже в каскаде => выигрывает по
+   специфичности здесь ни при чём, но порядок в файле имеет значение при
+   равной специфичности .marker.destroyed .dot vs .marker.fac-Х .dot —
+   оба 2 класса, тут выигрывает последний объявленный, поэтому блок ниже
+   стоит СТРОГО после блоков подсветки фракции) */
+.marker.destroyed .dot{filter:grayscale(1) brightness(0.55) drop-shadow(0 0 4px rgba(0,0,0,0.6));}
+.marker.destroyed .lbl{color:var(--parchment-dim);border-color:var(--line);text-decoration:line-through;text-decoration-color:rgba(216,90,48,0.7);}
+.marker .destroyed-badge{
+  position:absolute;top:-4px;left:-4px;
+  font-size:9px;line-height:1;width:13px;height:13px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--void-0);border:1px solid #D85A30;color:#D85A30;
+}
+/* ctrl+клик выделение маркеров для сборки в архипелаг (редактор, карта) */
+.marker.selected .dot{
+  outline:2px solid var(--gold-bright);outline-offset:2px;border-radius:50%;
+}
+.map-selection-panel{
+  position:absolute;left:50%;bottom:24px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;
+  background:var(--void-1);border:1px solid var(--gold);border-radius:6px;
+  padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:50;
+  font-family:var(--ui);font-size:12.5px;color:var(--parchment);
+}
+.map-selection-panel button{
+  font-family:var(--ui);font-size:12px;border-radius:3px;padding:6px 11px;cursor:pointer;
+}
+.map-selection-panel #mapSelectionAssignBtn{background:var(--gold);border:none;color:var(--void-0);font-weight:600;}
+.map-selection-panel #mapSelectionClearBtn{background:none;border:1px solid var(--line);color:var(--parchment-dim);}
+.map-selection-panel #mapSelectionClearBtn:hover{border-color:#D85A30;color:#D85A30;}
+
+/* кнопка "+ архипелаг" у строки острова в Атласе */
+.wiki-island-row{display:inline-flex;align-items:center;gap:4px;}
+.wiki-archipelago-add{
+  background:none;border:none;cursor:pointer;font-size:11px;opacity:0.55;
+  padding:2px 4px;line-height:1;
+}
+.wiki-archipelago-add:hover{opacity:1;}
 .marker .badge{
   position:absolute;top:-4px;right:-4px;
   font-size:9px;line-height:1;width:12px;height:12px;border-radius:50%;
@@ -770,6 +846,12 @@ body{
 .entity-source-item a{color:var(--gold-bright);text-decoration:none;}
 .entity-source-item a:hover{text-decoration:underline;}
 .entity-source-item .note{color:var(--parchment-dim);font-size:11.5px;}
+.destroyed-banner{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--ui);font-size:12.5px;color:#D85A30;
+  background:rgba(216,90,48,0.1);border:1px solid rgba(216,90,48,0.4);
+  border-radius:3px;padding:6px 12px;margin:8px 0;
+}
 .entity-source-remove{background:none;border:none;color:var(--parchment-dim);cursor:pointer;font-size:13px;line-height:1;}
 .entity-source-remove:hover{color:#D85A30;}
 .add-source-btn{
@@ -777,6 +859,34 @@ body{
   color:var(--parchment-dim);border-radius:3px;padding:7px 12px;cursor:pointer;
 }
 .add-source-btn:hover{border-color:var(--gold);color:var(--gold-bright);}
+
+/* ---------- TIMELINE VIEW (global, container) ---------- */
+#timelineView{
+  position:absolute;inset:0;top:var(--topbar-h,64px);overflow-y:auto;display:none;
+  background:var(--void-0);
+}
+#timelineView.show{display:block;}
+
+#archipelagosView{
+  position:absolute;inset:0;top:var(--topbar-h,64px);overflow-y:auto;display:none;
+  background:var(--void-0);
+}
+#archipelagosView.show{display:block;}
+
+/* ---------- TIMELINE (хронология, содержимое) ---------- */
+.timeline-track{display:flex;flex-direction:column;}
+.timeline-track-compact .timeline-event{padding:10px 0;}
+.timeline-event{
+  display:flex;gap:18px;padding:16px 0;border-bottom:1px solid var(--line);
+}
+.timeline-event:last-child{border-bottom:none;}
+.timeline-year{
+  font-family:var(--display);font-size:20px;color:var(--gold-bright);
+  flex:0 0 70px;text-align:right;
+}
+.timeline-event-body{flex:1;min-width:0;}
+.timeline-event-title{font-family:var(--ui);font-size:14px;font-weight:600;color:var(--parchment);}
+.timeline-event-desc{font-family:var(--ui);font-size:12.5px;color:var(--parchment-dim);margin-top:4px;white-space:pre-wrap;}
 
 /* ---------- BRAND LOGO ---------- */
 .brand-logo{height:44px;width:auto;max-width:160px;object-fit:contain;vertical-align:middle;margin-right:2px;}

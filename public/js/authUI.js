@@ -33,6 +33,7 @@ async function updateAuthUI(){
     if(state.view === 'config' || state.view === 'about') showMap();
     if(state.editorOn){
       state.editorOn = false;
+      if(typeof clearMapSelection==='function') clearMapSelection(); // на всякий случай, тем же путём, что и ручное выключение редактора
       editorBtn.classList.remove('on');
       editorBtn.textContent = 'Редактор';
       document.body.classList.remove('editor-on');
@@ -110,6 +111,7 @@ authOverlay.addEventListener('mousedown', e=>{ if(e.target===authOverlay) closeA
 document.getElementById('editorToggle').addEventListener('click', ()=>{
   if(!authStatus.loggedIn){ openAuth(); return; }
   state.editorOn = !state.editorOn;
+  if(!state.editorOn && typeof clearMapSelection==='function') clearMapSelection(); // выключили редактор — панель "Собрать в архипелаг" (доступна только в редакторе) не должна оставаться висеть
   document.getElementById('editorToggle').classList.toggle('on', state.editorOn);
   document.getElementById('editorToggle').textContent = state.editorOn? '● Редактор включён':'Редактор';
   document.body.classList.toggle('editor-on', state.editorOn);

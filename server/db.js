@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 let DatabaseSync;
 try{
@@ -36,6 +37,17 @@ db.transaction = function(fn){
 };
 
 db.exec(`
+-- контейнер группы островов (см. обсуждение роадмапа) — старое текстовое
+-- поле allods.archipelago остаётся в схеме нетронутым (см. миграцию ниже:
+-- значения из него разово переносятся в архипелаги), но UI им больше не
+-- пользуется, источник истины теперь archipelago_id.
+CREATE TABLE IF NOT EXISTS archipelagos (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL DEFAULT 'Аллоды Онлайн',
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS allods (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -199,7 +211,77 @@ CREATE TABLE IF NOT EXISTS source_refs (
 );
 CREATE INDEX IF NOT EXISTS idx_source_refs_source ON source_refs(source_id);
 CREATE INDEX IF NOT EXISTS idx_source_refs_entity ON source_refs(entity_type, entity_id);
+
+-- Хронология: и общемировые события ("хронология мира"), и события
+-- конкретного аллода (тогда allod_id заполнен). year — просто число:
+-- договорились не городить отдельный лейбл эпохи, т.к. у части событий
+-- даты внутри одного года "размазаны" — sort_order разруливает порядок
+-- внутри одного year, когда самого года для сортировки недостаточно.
+CREATE TABLE IF NOT EXISTS timeline_events (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL DEFAULT 'Аллоды Онлайн',
+  scope TEXT NOT NULL DEFAULT 'world', -- 'world' | 'allod'
+  allod_id TEXT REFERENCES allods(id) ON DELETE CASCADE,
+  year INTEGER NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_timeline_allod ON timeline_events(allod_id);
+CREATE INDEX IF NOT EXISTS idx_timeline_project_year ON timeline_events(project, year, sort_order);
+
+-- Полнотекстовый поиск по тексту статей (не только по названию, как раньше
+-- искал клиент). id — TEXT (не INTEGER PRIMARY KEY), поэтому content_rowid
+-- у allods не подходит для FTS5 external-content (там нужен настоящий
+-- integer rowid) — держим свою копию нужных полей в отдельной FTS5-таблице,
+-- id хранится как обычная колонка (UNINDEXED — не участвует в полнотекстовом
+-- поиске, только для обратной связи с allods.id). Синхронизация — триггерами
+-- на allods, а не в JS-коде роутов: так не получится забыть обновить индекс
+-- на каком-то из путей записи (прямой PATCH, импорт, restore и т.п.).
+CREATE VIRTUAL TABLE IF NOT EXISTS allods_fts USING fts5(
+  id UNINDEXED,
+  name, description, history, plot,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
 `);
+
+const hasAllodsFtsTriggers = db.prepare(
+  "SELECT name FROM sqlite_master WHERE type='trigger' AND name='allods_fts_ai'"
+).get();
+if(!hasAllodsFtsTriggers){
+  db.exec(`
+CREATE TRIGGER allods_fts_ai AFTER INSERT ON allods BEGIN
+  INSERT INTO allods_fts(id, name, description, history, plot)
+  VALUES (new.id, new.name, new.description, new.history, new.plot);
+END;
+CREATE TRIGGER allods_fts_ad AFTER DELETE ON allods BEGIN
+  DELETE FROM allods_fts WHERE id = old.id;
+END;
+CREATE TRIGGER allods_fts_au AFTER UPDATE ON allods BEGIN
+  DELETE FROM allods_fts WHERE id = old.id;
+  INSERT INTO allods_fts(id, name, description, history, plot)
+  VALUES (new.id, new.name, new.description, new.history, new.plot);
+END;
+`);
+}
+
+// бэкафилл — если в allods уже есть записи (обновление существующей базы,
+// где allods_fts только что создалась пустой выше), а в allods_fts их ещё
+// нет, заполняем разово. Сравниваем по количеству строк, а не наличием
+// таблицы — то же самое условие защищает от повторного бэкафилла на
+// каждом старте, когда индекс уже наполнен.
+{
+  const allodsCount = db.prepare('SELECT COUNT(*) AS n FROM allods').get().n;
+  const ftsCount = db.prepare('SELECT COUNT(*) AS n FROM allods_fts').get().n;
+  if(allodsCount > 0 && ftsCount === 0){
+    console.log('Миграция: заполняю полнотекстовый индекс (allods_fts) из существующих данных...');
+    db.exec(`
+      INSERT INTO allods_fts(id, name, description, history, plot)
+      SELECT id, name, description, history, plot FROM allods
+    `);
+  }
+}
 
 // миграция для баз, созданных до появления подписей к фото
 const galleryCols = db.prepare("PRAGMA table_info(gallery)").all().map(c=>c.name);
@@ -222,6 +304,39 @@ if(!allodCols.includes('project')){
   console.log('Миграция: добавляю колонку project в таблицу allods (существующие записи -> "Аллоды Онлайн")...');
   db.exec("ALTER TABLE allods ADD COLUMN project TEXT DEFAULT 'Аллоды Онлайн'");
   db.exec("UPDATE allods SET project = 'Аллоды Онлайн' WHERE project IS NULL");
+}
+if(!allodCols.includes('year_appeared')){
+  console.log('Миграция: добавляю колонки year_appeared/year_disappeared в таблицу allods...');
+  db.exec("ALTER TABLE allods ADD COLUMN year_appeared INTEGER");
+  db.exec("ALTER TABLE allods ADD COLUMN year_disappeared INTEGER");
+}
+if(!allodCols.includes('archipelago_id')){
+  console.log('Миграция: добавляю колонку archipelago_id в таблицу allods...');
+  // ON DELETE SET NULL: удаление архипелага не должно удалять острова —
+  // они просто открепляются (см. обсуждение роадмапа)
+  db.exec("ALTER TABLE allods ADD COLUMN archipelago_id TEXT REFERENCES archipelagos(id) ON DELETE SET NULL");
+
+  // авто-создание архипелагов из уже введённых текстовых значений — по
+  // одной записи на уникальную пару (project, archipelago), острова с этим
+  // текстом сразу привязываются. Дальше эти архипелаги — обычные записи,
+  // управляются через UI как любые другие (переименование/объединение и
+  // т.п.), это только отправная точка, а не разовый снимок для отображения.
+  const distinctArchs = db.prepare(
+    "SELECT DISTINCT project, archipelago FROM allods WHERE archipelago IS NOT NULL AND TRIM(archipelago) <> ''"
+  ).all();
+  if(distinctArchs.length){
+    const insertArch = db.prepare('INSERT INTO archipelagos (id, project, name, created_at) VALUES (?,?,?,?)');
+    const linkAllods = db.prepare('UPDATE allods SET archipelago_id=? WHERE project=? AND archipelago=?');
+    const tx = db.transaction((rows)=>{
+      rows.forEach(r=>{
+        const id = 'arch_' + crypto.randomBytes(6).toString('hex');
+        insertArch.run(id, r.project, r.archipelago, Date.now());
+        linkAllods.run(id, r.project, r.archipelago);
+      });
+    });
+    tx(distinctArchs);
+    console.log(`Миграция: авто-создано архипелагов из текстовых значений: ${distinctArchs.length}`);
+  }
 }
 const locationCols = db.prepare("PRAGMA table_info(locations)").all().map(c=>c.name);
 if(!locationCols.includes('mapX')){

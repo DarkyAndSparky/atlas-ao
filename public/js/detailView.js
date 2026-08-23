@@ -1,6 +1,7 @@
 /* ====================== VIEW ENTRY ====================== */
 function openDetail(id, locId=null){
-  if(state.view==='map' || state.view==='wiki' || state.view==='sources') state.returnView = state.view;
+  if(state.view==='map' || state.view==='wiki' || state.view==='sources' || state.view==='timeline' || state.view==='archipelagos') state.returnView = state.view;
+  if(typeof clearMapSelection==='function') clearMapSelection(); // уходим с карты — снимаем ctrl+клик выделение архипелага, если было
   state.view = locId? 'location':'detail';
   state.currentId = id;
   state.currentLocId = locId;
@@ -10,6 +11,8 @@ function openDetail(id, locId=null){
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
   document.getElementById('sourcesView').classList.remove('show');
+  document.getElementById('timelineView').classList.remove('show');
+  document.getElementById('archipelagosView').classList.remove('show');
   detailView.classList.add('show');
   renderDetail();
   renderTray();
@@ -32,6 +35,7 @@ function renderDetail(){
       </div>
       <h1 contenteditable="${state.editorOn}" data-field="name">${escapeHtml(item.name)}</h1>
       <button class="del-allod editor-hidden" id="delAllodBtn" title="Удалить остров">✕ Удалить остров</button>
+      ${item.year_disappeared!=null ? `<div class="destroyed-banner">⚰ Остров уничтожен в ${escapeHtml(String(item.year_disappeared))} году</div>` : ''}
       <div class="tag-row">
         ${(item.mapX==null || item.mapY==null) ? `<span class="tag tag-unplaced" title="Этот остров есть в базе, но не отмечен на глобальной карте">✕ не на карте</span>`:''}
         ${renderEditableTag(item, 'faction', 'фракцию', `fac-${facCls}`)}
@@ -64,19 +68,22 @@ function renderDetail(){
             <button class="add-location editor-hidden" id="addLocBtn">+ Добавить локацию</button>
           </div>
           <div class="section" id="relatedSection"></div>
+          <div class="section" id="timelineSection"></div>
           <div class="section" id="sourcesSection"></div>
         </div>
         <div>
           <div class="section-label">Сведения</div>
           ${sidebarFact('Владелец', item.holder, 'holder')}
-          ${sidebarFact('Архипелаг', item.archipelago)}
           ${sidebarFact('Тип', item.type, 'type')}
           ${sidebarFact('Дополнение', item.expansion, 'expansion')}
           ${sidebarFact('Карта локации', item.hasMap ? 'есть' : null)}
           ${sidebarFact('Сюжет', item.plot, 'plot')}
+          ${sidebarFact('Год появления', item.year_appeared!=null ? String(item.year_appeared) : null, 'year_appeared')}
+          ${sidebarFact('Год исчезновения', item.year_disappeared!=null ? String(item.year_disappeared) : null, 'year_disappeared')}
           ${sidebarFact('Проект', item.project)}
           <div class="icon-control" id="iconControl"></div>
           <div class="icon-control" id="projectControl"></div>
+          <div class="icon-control" id="archipelagoControl"></div>
         </div>
       </div>
     </div>
@@ -89,9 +96,11 @@ function renderDetail(){
   renderLocationMiniMap(item);
   renderLocations(item);
   renderRelated(item);
+  renderAllodTimeline(document.getElementById('timelineSection'), item.id);
   renderEntitySources(document.getElementById('sourcesSection'), 'allod', item.id);
   renderIconControl(item);
   renderProjectControl(item);
+  renderArchipelagoControl(item);
   if(state.editorOn) document.getElementById('addLocBtn').classList.remove('editor-hidden');
   document.getElementById('addLocBtn').onclick = async ()=>{
     const name = prompt('Название локации:');

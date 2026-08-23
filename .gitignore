@@ -6,6 +6,9 @@ server/atlas.db
 server/atlas.db-shm
 server/atlas.db-wal
 server/.session-secret
+server/.https-cert/
+certs/
+acme-webroot/
 
 # пользовательский контент — не часть исходников проекта
 uploads/*

@@ -133,6 +133,8 @@ function showConfig(){
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
   document.getElementById('sourcesView').classList.remove('show');
+  document.getElementById('timelineView').classList.remove('show');
+  document.getElementById('archipelagosView').classList.remove('show');
   document.getElementById('configView').classList.add('show');
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.remove('active'));
   trayEl.classList.remove('show');

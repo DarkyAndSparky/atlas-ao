@@ -35,7 +35,11 @@ RUN mkdir -p /app/uploads /app/backups /app/data \
     && chown -R atlas:atlas /app
 
 USER atlas
-EXPOSE 4173
+# 4173 — дефолтный голый HTTP (без ATLAS_NATIVE_HTTPS). 9311/9312 — HTTPS/редирект,
+# когда ATLAS_NATIVE_HTTPS=1 (см. docker-compose.yml/docker-compose.local.yml).
+# EXPOSE тут чисто документирует порты образа, ничего не открывает сам по себе —
+# реальные пробросы задаются в docker-compose.*.yml через ports:.
+EXPOSE 4173 9311 9312
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4173)+'/api/health').then(r=>{if(r.status!==200)process.exit(1)}).catch(()=>process.exit(1))"

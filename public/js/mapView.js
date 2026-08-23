@@ -38,18 +38,53 @@ function hideSearchResults(){
 // Выпадающий список результатов поиска — открывает страницу острова напрямую,
 // даже если он не расставлен на карте (например, сюжетно уничтоженные аллоды,
 // которые намеренно не показываются как метка на глобальной карте).
+//
+// Два слоя: имя (мгновенно, из уже загруженных state.data — то же самое,
+// что фильтрует метки на карте) и полнотекстовый (по /api/search — c
+// небольшой задержкой, ищет и внутри description/history/plot, не только
+// в названии). Полнотекстовые совпадения, чьё название уже показано в первом
+// слое, не дублируются.
+let searchRequestSeq = 0;
 function renderSearchResults(q){
   const box = document.getElementById('searchResults');
-  if(!q){ box.classList.remove('show'); box.innerHTML=''; return; }
-  const matches = state.data
+  if(!q){ box.classList.remove('show'); box.innerHTML=''; clearTimeout(searchDebounceTimer); return; }
+
+  const nameMatches = state.data
     .filter(d=> d.name.toLowerCase().includes(q))
     .slice(0, 30);
-  if(!matches.length){
-    box.innerHTML = `<div class="sr-empty">Ничего не найдено по «${escapeHtml(q)}»</div>`;
-    box.classList.add('show');
-    return;
+
+  box.innerHTML = searchResultsHtml(nameMatches, null, true);
+  wireSearchResultClicks(box);
+  box.classList.add('show');
+
+  clearTimeout(searchDebounceTimer);
+  const mySeq = ++searchRequestSeq;
+  searchDebounceTimer = setTimeout(async ()=>{
+    let ftsMatches = [];
+    try{ ftsMatches = await api('/search?q=' + encodeURIComponent(q)); }
+    catch(e){ /* поиск по тексту недоступен — остаёмся с тем, что нашли по имени */ }
+    if(mySeq !== searchRequestSeq) return; // пользователь успел напечатать ещё что-то, этот ответ уже устарел
+    const nameIds = new Set(nameMatches.map(m=>m.id));
+    const extra = ftsMatches.filter(m=> !nameIds.has(m.id));
+    box.innerHTML = searchResultsHtml(nameMatches, extra, false);
+    wireSearchResultClicks(box);
+  }, 250);
+}
+let searchDebounceTimer = null;
+
+// markToMark — сниппет с сервера приходит с временными маркерами \u0001/\u0002
+// вокруг совпадений (НЕ HTML) — экранируем как обычный текст, а <mark> уже
+// после escapeHtml, чтобы сам текст статьи не мог заинжектить разметку
+function markToMark(snippet){
+  if(!snippet) return '';
+  return escapeHtml(snippet).replaceAll('\u0001', '<mark>').replaceAll('\u0002', '</mark>');
+}
+
+function searchResultsHtml(nameMatches, ftsExtra, ftsPending){
+  if(!nameMatches.length && ftsExtra && !ftsExtra.length){
+    return `<div class="sr-empty">Ничего не найдено${ftsPending ? '' : ' — ни по названию, ни в тексте статей'}</div>`;
   }
-  box.innerHTML = matches.map(item=>{
+  const nameHtml = nameMatches.map(item=>{
     const placed = item.mapX!=null && item.mapY!=null;
     const meta = [item.faction, item.category].filter(Boolean).join(' · ');
     return `<div class="sr-item" data-id="${escapeHtml(item.id)}">
@@ -57,6 +92,23 @@ function renderSearchResults(q){
       <div class="sr-meta">${meta?`<span>${escapeHtml(meta)}</span>`:''}${placed?'':'<span class="sr-badge unplaced">не на карте</span>'}</div>
     </div>`;
   }).join('');
+
+  let ftsHtml = '';
+  if(ftsPending){
+    ftsHtml = `<div class="sr-fts-status">Ищу в тексте статей…</div>`;
+  }else if(ftsExtra && ftsExtra.length){
+    ftsHtml = `<div class="sr-fts-divider">Найдено в тексте статей</div>` + ftsExtra.map(item=>`
+      <div class="sr-item sr-item-fts" data-id="${escapeHtml(item.id)}">
+        <div class="sr-name">${escapeHtml(item.name)}</div>
+        ${item.snippet ? `<div class="sr-snippet">${markToMark(item.snippet)}</div>` : ''}
+        ${!item.placed ? '<span class="sr-badge unplaced">не на карте</span>' : ''}
+      </div>
+    `).join('');
+  }
+  return nameHtml + ftsHtml;
+}
+
+function wireSearchResultClicks(box){
   box.querySelectorAll('.sr-item').forEach(el=>{
     el.addEventListener('click', ()=>{
       hideSearchResults();
@@ -65,7 +117,6 @@ function renderSearchResults(q){
       openDetail(el.dataset.id);
     });
   });
-  box.classList.add('show');
 }
 
 /* ====================== ACTIVE FILTER BAR ====================== */
@@ -116,19 +167,26 @@ function renderMarkers(){
     if(!passesFilter(item)) return;
     placedCount++;
     const m = document.createElement('div');
-    m.className = 'marker' + (state.editorOn ? ' editable' : '');
+    const destroyed = item.year_disappeared != null;
+    const fc = facClass(item.faction);
+    m.className = 'marker' + (state.editorOn ? ' editable' : '') + (fc ? ' fac-'+fc : '') + (destroyed ? ' destroyed' : '');
     m.dataset.fac = item.faction;
     m.dataset.id = item.id;
     m.style.left = item.mapX + 'px';
     m.style.top = item.mapY + 'px';
     const icon = dotIcon(item);
     const badge = categoryBadge(item);
-    m.innerHTML = `<div class="dot" style="width:${icon.px}px;height:${icon.px}px">${icon.html}${badge}</div><div class="lbl">${escapeHtml(item.name)}</div>`;
-    m.addEventListener('click', ()=>{
+    const raceIconUrl = factionIconFor(item.faction);
+    const raceBadge = raceIconUrl ? `<span class="race-badge" title="${escapeHtml(item.faction)}"><img src="${escapeHtml(raceIconUrl)}" alt=""></span>` : '';
+    const destroyedBadge = destroyed ? `<span class="destroyed-badge" title="Уничтожен${item.year_disappeared!=null ? ' в '+escapeHtml(String(item.year_disappeared))+' году' : ''}">⚰</span>` : '';
+    m.innerHTML = `<div class="dot" style="width:${icon.px}px;height:${icon.px}px">${icon.html}${badge}${raceBadge}${destroyedBadge}</div><div class="lbl">${escapeHtml(item.name)}</div>`;
+    m.addEventListener('click', (ev)=>{
       if(m.classList.contains('was-dragged')){ m.classList.remove('was-dragged'); return; }
+      if(state.editorOn && (ev.ctrlKey || ev.metaKey)){ toggleMarkerSelection(item.id, m); return; }
       openDetail(item.id);
     });
     if(state.editorOn){ makeMarkerDraggable(m, item); }
+    if(state.selectedAllodIds && state.selectedAllodIds.has(item.id)) m.classList.add('selected');
     mapCanvas.appendChild(m);
   });
   emptyHint.style.display = placedCount===0 ? 'block' : 'none';
@@ -382,6 +440,8 @@ function showMap(){
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
   document.getElementById('sourcesView').classList.remove('show');
+  document.getElementById('timelineView').classList.remove('show');
+  document.getElementById('archipelagosView').classList.remove('show');
   mapView.style.display='block';
   document.getElementById('zoomCtrl').style.display='flex';
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='map'));
@@ -415,6 +475,8 @@ document.querySelectorAll('.view-toggle-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     if(btn.dataset.view==='map') showMap();
     else if(btn.dataset.view==='sources') showSources();
+    else if(btn.dataset.view==='timeline') showTimeline();
+    else if(btn.dataset.view==='archipelagos') showArchipelagos();
     else showWiki();
   });
 });

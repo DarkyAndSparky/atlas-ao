@@ -24,6 +24,8 @@ function showWiki(){
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
   document.getElementById('sourcesView').classList.remove('show');
+  document.getElementById('timelineView').classList.remove('show');
+  document.getElementById('archipelagosView').classList.remove('show');
   document.getElementById('wikiView').classList.add('show');
   updateActiveFilterBar(); // раньше тут была безусловная .add('hidden') — активный
                             // фильтр, выставленный кликом по тегу, становился
@@ -71,10 +73,13 @@ function renderWiki(){
         <h3 class="wiki-size-title">${escapeHtml(WIKI_SIZE_LABEL[sizeKey]||sizeKey)}</h3>
         <div class="wiki-island-list">
           ${items.map(d=>`
-            <a class="wiki-island-link" href="#" data-action="open-detail" data-id="${escapeHtml(d.id)}">
-              ${escapeHtml(d.name)}
-              ${d.mapX==null ? '<span class="wiki-unplaced-mark" title="Ещё не размещён на карте">●</span>' : ''}
-            </a>
+            <span class="wiki-island-row">
+              <a class="wiki-island-link" href="#" data-action="open-detail" data-id="${escapeHtml(d.id)}">
+                ${escapeHtml(d.name)}
+                ${d.mapX==null ? '<span class="wiki-unplaced-mark" title="Ещё не размещён на карте">●</span>' : ''}
+              </a>
+              ${state.editorOn ? `<button class="wiki-archipelago-add" data-action="add-to-archipelago" data-id="${escapeHtml(d.id)}" title="Добавить в архипелаг">+🏝</button>` : ''}
+            </span>
           `).join('')}
         </div>
       </div>`;
@@ -92,10 +97,13 @@ function renderWiki(){
         <h3 class="wiki-size-title">Другой размер</h3>
         <div class="wiki-island-list">
           ${leftover.map(d=>`
-            <a class="wiki-island-link" href="#" data-action="open-detail" data-id="${escapeHtml(d.id)}">
-              ${escapeHtml(d.name)}
-              ${d.mapX==null ? '<span class="wiki-unplaced-mark" title="Ещё не размещён на карте">●</span>' : ''}
-            </a>
+            <span class="wiki-island-row">
+              <a class="wiki-island-link" href="#" data-action="open-detail" data-id="${escapeHtml(d.id)}">
+                ${escapeHtml(d.name)}
+                ${d.mapX==null ? '<span class="wiki-unplaced-mark" title="Ещё не размещён на карте">●</span>' : ''}
+              </a>
+              ${state.editorOn ? `<button class="wiki-archipelago-add" data-action="add-to-archipelago" data-id="${escapeHtml(d.id)}" title="Добавить в архипелаг">+🏝</button>` : ''}
+            </span>
           `).join('')}
         </div>
       </div>`;
@@ -120,6 +128,12 @@ function factionGroupIconHtml(groupKey){
 /* wikiView-обёртка не пересоздаётся между рендерами (только innerHTML внутри неё),
    поэтому один делегированный обработчик достаточно повесить один раз. */
 document.getElementById('wikiView').addEventListener('click', (ev)=>{
+  const archBtn = ev.target.closest('[data-action="add-to-archipelago"]');
+  if(archBtn){
+    ev.preventDefault();
+    attachToArchipelagoFlow(archBtn.dataset.id).then(ok=>{ if(ok) renderWiki(); });
+    return;
+  }
   const el = ev.target.closest('[data-action="open-detail"]');
   if(!el) return;
   ev.preventDefault();
