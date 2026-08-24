@@ -191,6 +191,39 @@ router.post('/password', requireAuth, async (req, res, next)=>{
   }catch(err){ next(err); }
 });
 
+// Изменение существующего пользователя — смена роли и/или принудительный
+// сброс пароля (админ подозревает компрометацию — включает флаг, при
+// следующем входе пользователя заставит сменить пароль, тем же путём, что
+// и обычное приглашение). Раньше единственным способом сменить роль или
+// заставить сменить пароль было удалить аккаунт и завести заново.
+router.patch('/users/:id', requireAdmin, (req, res)=>{
+  const id = Number(req.params.id);
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(id);
+  if(!user) return res.status(404).json({ error: 'Пользователь не найден.' });
+
+  if('role' in req.body){
+    const role = req.body.role;
+    if(!VALID_ROLES.includes(role)) return res.status(400).json({ error: 'Неизвестная роль.' });
+    // та же защита, что и на удаление ниже — нельзя оставить сайт без
+    // единого администратора
+    if(user.role === 'admin' && role !== 'admin'){
+      const adminCount = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='admin'").get().n;
+      if(adminCount <= 1) return res.status(400).json({ error: 'Нельзя понизить последнего оставшегося администратора.' });
+    }
+    db.prepare('UPDATE users SET role=? WHERE id=?').run(role, id);
+    // если админ меняет роль самому себе — применяем сразу к текущей сессии,
+    // иначе requireAdmin на следующем же запросе будет опираться на старую
+    // роль из сессии, а не на то, что реально в базе
+    if(req.session.userId === id) req.session.role = role;
+  }
+
+  if(req.body.forcePasswordReset === true){
+    db.prepare('UPDATE users SET must_change_password=1 WHERE id=?').run(id);
+  }
+
+  res.json(publicUser(db.prepare('SELECT id, username, role, must_change_password, created_at FROM users WHERE id=?').get(id)));
+});
+
 // Удаление чужого (или своего) аккаунта редактора — только админ. Нельзя
 // удалить последнего оставшегося аккаунта вообще и нельзя удалить последнего
 // оставшегося admin — иначе сайт останется без единого способа управлять

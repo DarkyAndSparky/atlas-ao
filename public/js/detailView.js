@@ -1,18 +1,20 @@
 /* ====================== VIEW ENTRY ====================== */
 function openDetail(id, locId=null){
-  if(state.view==='map' || state.view==='wiki' || state.view==='sources' || state.view==='timeline' || state.view==='archipelagos') state.returnView = state.view;
+  if(state.view==='map' || state.view==='wiki' || state.view==='sources' || state.view==='timeline' || state.view==='archipelagos' || state.view==='recentChanges') state.returnView = state.view;
   if(typeof clearMapSelection==='function') clearMapSelection(); // уходим с карты — снимаем ctrl+клик выделение архипелага, если было
   state.view = locId? 'location':'detail';
   state.currentId = id;
   state.currentLocId = locId;
   mapView.style.display='none';
   document.getElementById('zoomCtrl').style.display='none';
+  document.getElementById('timelineSliderBar').classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
   document.getElementById('sourcesView').classList.remove('show');
   document.getElementById('timelineView').classList.remove('show');
   document.getElementById('archipelagosView').classList.remove('show');
+  document.getElementById('recentChangesView').classList.remove('show');
   detailView.classList.add('show');
   renderDetail();
   renderTray();
@@ -70,6 +72,7 @@ function renderDetail(){
           <div class="section" id="relatedSection"></div>
           <div class="section" id="timelineSection"></div>
           <div class="section" id="sourcesSection"></div>
+          <div class="section" id="historySection"></div>
         </div>
         <div>
           <div class="section-label">Сведения</div>
@@ -98,6 +101,7 @@ function renderDetail(){
   renderRelated(item);
   renderAllodTimeline(document.getElementById('timelineSection'), item.id);
   renderEntitySources(document.getElementById('sourcesSection'), 'allod', item.id);
+  renderAllodHistory(document.getElementById('historySection'), item.id);
   renderIconControl(item);
   renderProjectControl(item);
   renderArchipelagoControl(item);
@@ -721,3 +725,65 @@ detailView.addEventListener('click', (ev)=>{
   else if(action==='edit-plain'){ editPlainField(el.dataset.field, el.dataset.label); }
   else if(action==='open-detail'){ openDetail(el.dataset.id); }
 });
+
+/* ---------------- история правок (снимки) ---------------- */
+// Простая история — не полноценное версионирование: список снимков с
+// датой/автором и кнопкой "посмотреть" (без диффа и без отката, см.
+// обсуждение роадмапа). Видна только вошедшим (тот же уровень доступа, что
+// и у бэкенда — GET .../history требует requireAuth), гостю ничего не показываем.
+const HISTORY_FIELD_LABELS = {
+  name:'Название', climate:'Климат', size:'Размер', holder:'Владелец',
+  faction:'Фракция', type:'Тип', category:'Категория', plot:'Сюжет',
+  expansion:'Дополнение', archipelago:'Архипелаг (текст, устаревшее поле)',
+  description:'Описание', history:'История',
+  year_appeared:'Год появления', year_disappeared:'Год исчезновения',
+};
+
+async function renderAllodHistory(wrap, allodId){
+  if(!authStatus.loggedIn){ wrap.innerHTML=''; return; }
+  wrap.innerHTML = `<div class="section-label">История правок</div><div id="historyList">Загрузка…</div>`;
+  let snapshots;
+  try{ snapshots = await api(`/allods/${allodId}/history`); }
+  catch(e){ document.getElementById('historyList').innerHTML=''; return; }
+
+  const listEl = document.getElementById('historyList');
+  if(!snapshots.length){
+    listEl.innerHTML = `<div class="prose empty" data-empty="Правок этого острова ещё не было записано в историю."></div>`;
+    return;
+  }
+  listEl.innerHTML = snapshots.map(s=>{
+    const date = new Date(s.created_at).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    return `
+      <div class="history-item" data-snapshot-id="${escapeHtml(s.id)}">
+        <div class="history-row">
+          <span class="history-date">${date}</span>
+          <span class="history-author">${s.changed_by ? escapeHtml(s.changed_by) : 'неизвестно кто'}</span>
+          <button class="history-view-btn" data-action="view-snapshot">Посмотреть</button>
+        </div>
+        <div class="history-snapshot-body" style="display:none"></div>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('[data-action="view-snapshot"]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const item = btn.closest('.history-item');
+      const body = item.querySelector('.history-snapshot-body');
+      const isOpen = body.style.display !== 'none';
+      if(isOpen){ body.style.display='none'; btn.textContent='Посмотреть'; return; }
+      if(!body.dataset.loaded){
+        try{
+          const data = await api(`/allod-snapshots/${item.dataset.snapshotId}`);
+          body.innerHTML = Object.entries(HISTORY_FIELD_LABELS).map(([field,label])=>{
+            const value = data.snapshot[field];
+            if(value===null || value===undefined || value==='') return '';
+            return `<div class="sidebar-fact"><span>${escapeHtml(label)}</span><b>${escapeHtml(String(value))}</b></div>`;
+          }).join('') || `<div class="prose empty" data-empty="Все поля были пустыми на момент этого снимка."></div>`;
+          body.dataset.loaded = '1';
+        }catch(e){ body.innerHTML = `<div class="prose empty" data-empty="Не удалось загрузить снимок."></div>`; }
+      }
+      body.style.display='block';
+      btn.textContent='Скрыть';
+    });
+  });
+}

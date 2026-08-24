@@ -228,3 +228,64 @@ test.describe('Панель конфига (админ)', ()=>{
   });
 
 });
+
+test.describe('Управление пользователями (расширенное меню прав)', ()=>{
+
+  test('смена роли существующего пользователя через выпадающий список', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await openConfig(page);
+
+    await page.fill('#cfgNewUser', 'e2e-role-target');
+    await page.fill('#cfgNewPass', 'e2e-role-target-pass1');
+    await page.selectOption('#cfgNewRole', 'editor');
+    await page.click('#cfgAddUserBtn');
+
+    const row = page.locator('.user-row', { hasText: 'e2e-role-target' });
+    const select = row.locator('.user-role-select');
+    await expect(select).toHaveValue('editor');
+
+    page.once('dialog', d => d.accept());
+    await select.selectOption('admin');
+    await expect(select).toHaveValue('admin');
+  });
+
+  test('нельзя понизить последнего администратора — select откатывается назад', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await openConfig(page);
+
+    const adminRow = page.locator('.user-row', { hasText: 'admin' }).first();
+    const select = adminRow.locator('.user-role-select');
+    // на этот момент в системе может быть больше одного админа из прошлого теста —
+    // проверяем именно ситуацию единственного администратора отдельно через API
+    const adminsCount = await page.evaluate(async () => {
+      const res = await fetch('/api/auth/users', { credentials: 'same-origin' });
+      const users = await res.json();
+      return users.filter(u => u.role === 'admin').length;
+    });
+    test.skip(adminsCount > 1, 'нужен ровно один администратор для этого сценария');
+
+    page.once('dialog', d => d.accept());
+    await select.selectOption('editor');
+    await expect(select).toHaveValue('admin'); // откатилось обратно после ошибки с сервера
+  });
+
+  test('«Сбросить пароль» помечает пользователя как ожидающего смены пароля', async ({ page })=>{
+    await gotoReady(page);
+    await loginViaUI(page);
+    await openConfig(page);
+
+    // свежезарегистрированный (приглашённый) пользователь и так стартует с
+    // ожидающим сбросом по умолчанию — берём уже существующий bootstrap-аккаунт
+    // admin, у которого этого флага изначально нет, чтобы проверить именно кнопку
+    const row = page.locator('.user-row', { hasText: 'admin' }).first();
+    await expect(row.locator('.user-reset-pending')).toHaveCount(0);
+
+    page.once('dialog', d => d.accept());
+    await row.locator('.user-reset-pass').click();
+
+    await expect(row.locator('.user-reset-pending')).toBeVisible();
+  });
+
+});

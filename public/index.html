@@ -43,6 +43,7 @@
     <input type="file" id="importInput" accept="application/json" style="display:none">
     <input type="file" id="restoreDbInput" accept=".db" style="display:none">
     <button id="themeQuickToggle" type="button" title="Сменить тему оформления">🌗</button>
+    <button class="btn" id="recentChangesBtn" style="display:none;" title="Последние изменения по всему сайту">🕘</button>
     <button id="editorToggle">Редактор</button>
     <button class="btn" id="authBtn">Войти</button>
     <button class="btn" id="configBtn" style="display:none;">⚙ Настройки</button>
@@ -152,10 +153,22 @@
     <button id="zoomOut">−</button>
   </div>
 
+  <div id="timelineSliderBar">
+    <span id="timelineMinLabel" class="timeline-year-edge"></span>
+    <input type="range" id="timelineRange" step="1">
+    <span id="timelineMaxLabel" class="timeline-year-edge"></span>
+    <input type="number" id="timelineYearInput" class="timeline-year-input" title="Год">
+    <label class="timeline-showall-label">
+      <input type="checkbox" id="timelineShowAllCheckbox">
+      Показать все острова
+    </label>
+  </div>
+
   <div id="wikiView"></div>
   <div id="sourcesView"></div>
   <div id="timelineView"></div>
   <div id="archipelagosView"></div>
+  <div id="recentChangesView"></div>
 
   <div id="configView"></div>
 
@@ -201,6 +214,8 @@
 <script src="js/sourcesView.js"></script>
 <script src="js/timelineView.js"></script>
 <script src="js/archipelagosView.js"></script>
+<script src="js/recentChangesView.js"></script>
+<script src="js/timelineSlider.js"></script>
 <script src="js/authUI.js"></script>
 <script src="js/annotations.js"></script>
 <script src="js/main.js"></script>

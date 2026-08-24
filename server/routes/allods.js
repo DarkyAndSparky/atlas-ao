@@ -91,6 +91,12 @@ router.patch('/allods/:id', requireAuth, (req, res)=>{
     if(f in updates) updates[f] = (updates[f] === '' || updates[f] === undefined) ? null : (updates[f]===null ? null : Number(updates[f]));
   }
   if(Object.keys(updates).length===0) return res.json(fullAllod(row));
+  // снимок ДО применения изменений — если правка что-то случайно стёрла,
+  // именно предыдущее состояние (а не то, что получилось после) даёт шанс
+  // восстановить потерянное. Снимаем только когда реально что-то меняется
+  // (проверка выше) — иначе история заполнялась бы пустыми "изменениями".
+  db.prepare('INSERT INTO allod_snapshots (id, allod_id, allod_name, snapshot_json, changed_by, created_at) VALUES (?,?,?,?,?,?)')
+    .run('snap_' + crypto.randomBytes(6).toString('hex'), row.id, row.name, JSON.stringify(row), req.session.username || null, Date.now());
   if('hasMap' in updates) updates.hasMap = updates.hasMap ? 1 : 0;
   // icon_url/location_map_url можно сменить на другую ссылку или очистить —
   // если старое значение указывало на локально загруженный файл (а не внешний
@@ -106,6 +112,40 @@ router.patch('/allods/:id', requireAuth, (req, res)=>{
   // поэтому в объект биндинга кладём ровно те ключи, что есть в setSql, плюс id.
   db.prepare(`UPDATE allods SET ${setSql} WHERE id=@id`).run({ ...updates, id: req.params.id });
   res.json(fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(req.params.id)));
+});
+
+// список снимков — без snapshot_json (может быть увесистым при длинной
+// истории/истории острова с большим description) — только то, что нужно
+// для списка "кто/когда"; сам снимок подгружается отдельно по клику
+// "посмотреть" (см. ниже)
+router.get('/allods/:id/history', requireAuth, (req, res)=>{
+  const rows = db.prepare(
+    'SELECT id, changed_by, created_at FROM allod_snapshots WHERE allod_id=? ORDER BY created_at DESC'
+  ).all(req.params.id);
+  res.json(rows);
+});
+
+router.get('/allod-snapshots/:snapshotId', requireAuth, (req, res)=>{
+  const row = db.prepare('SELECT * FROM allod_snapshots WHERE id=?').get(req.params.snapshotId);
+  if(!row) return res.status(404).json({ error: 'Снимок не найден' });
+  let snapshot;
+  try{ snapshot = JSON.parse(row.snapshot_json); }
+  catch(e){ return res.status(500).json({ error: 'Снимок повреждён' }); }
+  res.json({ id: row.id, allodId: row.allod_id, allodName: row.allod_name, changedBy: row.changed_by, createdAt: row.created_at, snapshot });
+});
+
+// Общий журнал изменений по всему сайту — та же таблица allod_snapshots
+// (она уже общая на все острова, allod_name в ней денормализован, поэтому
+// join с allods не нужен даже для уже удалённых островов). Курсорная
+// пагинация по created_at, не offset — список постоянно растёт, offset
+// «плывёт» при новых правках между запросами страниц.
+router.get('/recent-changes', requireAuth, (req, res)=>{
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+  const before = req.query.before ? Number(req.query.before) : null;
+  const rows = before && Number.isFinite(before)
+    ? db.prepare('SELECT id, allod_id, allod_name, changed_by, created_at FROM allod_snapshots WHERE created_at < ? ORDER BY created_at DESC LIMIT ?').all(before, limit)
+    : db.prepare('SELECT id, allod_id, allod_name, changed_by, created_at FROM allod_snapshots ORDER BY created_at DESC LIMIT ?').all(limit);
+  res.json(rows);
 });
 
 /* ---------------- locations ---------------- */

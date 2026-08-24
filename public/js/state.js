@@ -10,6 +10,8 @@ const state = {
   filters: { category:'', faction:'', q:'', archipelago:'', climate:'', size:'' },
   cam: { x: 0, y: 0, scale: 0.72 }, // реальное центрирование выставляется в main.js после того, как известен размер #mapView
   project: null, // выставляется в main.js после boot() из PROJECTS[0] или localStorage
+  timelineShowAll: true, // слайдер динамики (timelineSlider.js) — по умолчанию фильтр по году выключен
+  timelineYear: null,
 };
 
 const byId = id => state.data.find(d=>d.id===id);
@@ -42,7 +44,20 @@ function passesFilter(item){
   if(state.filters.climate && item.climate!==state.filters.climate) return false;
   if(state.filters.size && item.size!==state.filters.size) return false;
   if(state.filters.q && !item.name.toLowerCase().includes(state.filters.q)) return false;
+  if(!islandExistsAtTimelineYear(item)) return false;
   return true;
+}
+
+// слайдер динамики (см. timelineSlider.js) — по умолчанию state.timelineShowAll=true,
+// то есть фильтр по году выключен (текущее поведение "показывать всё" не
+// меняется, пока человек явно не включит режим "на такой-то год"). Остров
+// без year_appeared считается существовавшим всегда "с начала", без
+// year_disappeared — существующим до сих пор.
+function islandExistsAtTimelineYear(item){
+  if(state.timelineShowAll || state.timelineYear==null) return true;
+  const appeared = item.year_appeared==null ? -Infinity : item.year_appeared;
+  const disappeared = item.year_disappeared==null ? Infinity : item.year_disappeared;
+  return appeared <= state.timelineYear && state.timelineYear < disappeared;
 }
 
 function activeFilterLabel(){

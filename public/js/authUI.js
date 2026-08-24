@@ -14,6 +14,7 @@ async function updateAuthUI(){
   const btn = document.getElementById('authBtn');
   const editorBtn = document.getElementById('editorToggle');
   const configBtn = document.getElementById('configBtn');
+  const recentChangesBtn = document.getElementById('recentChangesBtn');
   const isAdmin = authStatus.loggedIn && authStatus.role === 'admin';
   if(authStatus.loggedIn){
     const roleLabel = authStatus.role === 'admin' ? 'админ' : 'редактор';
@@ -25,12 +26,17 @@ async function updateAuthUI(){
     // внизу (см. main.js), а полная вкладка открывается по клику на версию —
     // тоже только администратору, эта проверка внутри самого обработчика клика.
     if(configBtn) configBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    // «Последние изменения» — любому вошедшему (редактору тоже, не только
+    // админу): это про координацию правок между собой, тот же уровень
+    // доступа, что и у бэкенд-эндпоинта (requireAuth, не requireAdmin)
+    if(recentChangesBtn) recentChangesBtn.style.display = 'inline-block';
     updateForcePasswordUI();
   }else{
     btn.textContent = 'Войти';
     btn.classList.remove('logged-in');
     if(configBtn) configBtn.style.display = 'none';
-    if(state.view === 'config' || state.view === 'about') showMap();
+    if(recentChangesBtn) recentChangesBtn.style.display = 'none';
+    if(state.view === 'config' || state.view === 'about' || state.view === 'recentChanges') showMap();
     if(state.editorOn){
       state.editorOn = false;
       if(typeof clearMapSelection==='function') clearMapSelection(); // на всякий случай, тем же путём, что и ручное выключение редактора
@@ -48,6 +54,10 @@ document.getElementById('configBtn').addEventListener('click', ()=>{
   if(!authStatus.loggedIn){ openAuth(); return; }
   if(authStatus.role !== 'admin'){ toast('Настройки доступны только администратору.'); return; }
   showConfig();
+});
+document.getElementById('recentChangesBtn').addEventListener('click', ()=>{
+  if(!authStatus.loggedIn){ openAuth(); return; }
+  showRecentChanges();
 });
 
 function openAuth(){

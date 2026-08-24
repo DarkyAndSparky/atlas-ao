@@ -376,6 +376,9 @@ body{
   padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:50;
   font-family:var(--ui);font-size:12.5px;color:var(--parchment);
 }
+/* если слайдер динамики виден одновременно (тоже внизу по центру) — поднимаем
+   панель выделения архипелага выше, чтобы не перекрывались */
+body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
 .map-selection-panel button{
   font-family:var(--ui);font-size:12px;border-radius:3px;padding:6px 11px;cursor:pointer;
 }
@@ -433,6 +436,26 @@ body{
   font-size:17px;border-radius:3px;cursor:pointer;
 }
 #zoomCtrl button:hover{border-color:var(--gold);}
+
+/* ---------- timeline slider (динамика островов) ---------- */
+#timelineSliderBar{
+  position:absolute;left:50%;bottom:20px;transform:translateX(-50%);
+  display:none;align-items:center;gap:10px;z-index:44;
+  background:var(--void-1);border:1px solid var(--line);border-radius:6px;
+  padding:9px 16px;box-shadow:0 4px 16px rgba(0,0,0,0.4);
+  font-family:var(--ui);font-size:12px;color:var(--parchment);
+}
+#timelineSliderBar.show{display:flex;}
+.timeline-year-edge{color:var(--parchment-dim);font-size:11px;min-width:3ch;text-align:center;}
+#timelineRange{width:180px;accent-color:var(--gold);}
+.timeline-year-input{
+  width:6ch;background:var(--void-0);border:1px solid var(--line);border-radius:3px;
+  color:var(--parchment);font-family:var(--ui);font-size:12px;padding:4px 6px;text-align:center;
+}
+.timeline-year-input:focus{border-color:var(--gold);}
+.timeline-showall-label{display:flex;align-items:center;gap:6px;color:var(--parchment-dim);cursor:pointer;white-space:nowrap;}
+#timelineRange:disabled{opacity:0.35;}
+.timeline-year-input:disabled{opacity:0.35;}
 
 /* ---------- drawing toolbar (векторный слой рисования на карте) ----------
    Видимость управляется из JS (см. updateDrawToolbarVisibility в mapView.js),
@@ -853,6 +876,22 @@ body{
   border-radius:3px;padding:6px 12px;margin:8px 0;
 }
 .entity-source-remove{background:none;border:none;color:var(--parchment-dim);cursor:pointer;font-size:13px;line-height:1;}
+
+/* ---------- ИСТОРИЯ ПРАВОК (снимки) ---------- */
+.history-item{border-bottom:1px solid var(--line);padding:8px 0;}
+.history-item:last-child{border-bottom:none;}
+.history-row{display:flex;align-items:center;gap:10px;font-family:var(--ui);font-size:12px;}
+.history-date{color:var(--parchment);}
+.history-author{color:var(--parchment-dim);flex:1;}
+.history-view-btn{
+  font-family:var(--ui);font-size:11px;background:none;border:1px solid var(--line);
+  color:var(--parchment-dim);border-radius:3px;padding:4px 10px;cursor:pointer;
+}
+.history-view-btn:hover{border-color:var(--gold);color:var(--gold-bright);}
+.history-snapshot-body{margin-top:8px;padding:8px 10px;background:var(--void-0);border:1px solid var(--line);border-radius:3px;}
+.history-target{color:var(--gold-bright);text-decoration:none;font-weight:600;}
+.history-target:hover{text-decoration:underline;}
+#recentChangesBtn{font-size:15px;line-height:1;}
 .entity-source-remove:hover{color:#D85A30;}
 .add-source-btn{
   font-family:var(--ui);font-size:12px;background:none;border:1px dashed var(--line);
@@ -872,6 +911,12 @@ body{
   background:var(--void-0);
 }
 #archipelagosView.show{display:block;}
+
+#recentChangesView{
+  position:absolute;inset:0;top:var(--topbar-h,64px);overflow-y:auto;display:none;
+  background:var(--void-0);
+}
+#recentChangesView.show{display:block;}
 
 /* ---------- TIMELINE (хронология, содержимое) ---------- */
 .timeline-track{display:flex;flex-direction:column;}
@@ -926,7 +971,7 @@ body{
 }
 .users-list{display:flex;flex-direction:column;gap:6px;margin-bottom:4px;}
 .user-row{
-  display:flex;align-items:center;gap:12px;padding:8px 12px;
+  display:flex;align-items:center;gap:12px;padding:8px 12px;flex-wrap:wrap;
   background:var(--void-0);border:1px solid var(--line);border-radius:3px;
 }
 .user-name{font-family:var(--body);font-size:14px;flex:1;}
@@ -935,8 +980,17 @@ body{
   padding:2px 7px;border-radius:3px;white-space:nowrap;}
 .user-role-admin{color:var(--gold-bright);background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.3);}
 .user-role-editor{color:var(--parchment-dim);background:rgba(255,255,255,0.05);border:1px solid var(--line);}
+.user-role-select{
+  font-family:var(--ui);font-size:11.5px;background:var(--void-1);color:var(--parchment);
+  border:1px solid var(--line);border-radius:3px;padding:5px 8px;cursor:pointer;
+}
+.user-role-select:focus{border-color:var(--gold);}
+.user-reset-pending{
+  font-family:var(--ui);font-size:10px;color:#D85A30;background:rgba(216,90,48,0.1);
+  border:1px solid rgba(216,90,48,0.35);border-radius:3px;padding:3px 8px;white-space:nowrap;
+}
 .user-date{font-family:var(--ui);font-size:11px;color:var(--parchment-dim);}
-.user-del{font-size:11.5px;padding:6px 12px;}
+.user-del,.user-reset-pass{font-size:11.5px;padding:6px 12px;white-space:nowrap;}
 
 .deco-manage-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(84px,1fr));gap:10px;margin-bottom:10px;}
 .deco-manage-item{

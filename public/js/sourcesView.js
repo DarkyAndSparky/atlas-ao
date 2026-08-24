@@ -19,12 +19,14 @@ function showSources(){
   state.currentId = null; state.currentLocId = null;
   mapView.style.display='none';
   document.getElementById('zoomCtrl').style.display='none';
+  document.getElementById('timelineSliderBar').classList.remove('show');
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
   document.getElementById('timelineView').classList.remove('show');
   document.getElementById('archipelagosView').classList.remove('show');
+  document.getElementById('recentChangesView').classList.remove('show');
   document.getElementById('sourcesView').classList.add('show');
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='sources'));
   trayEl.classList.remove('show');

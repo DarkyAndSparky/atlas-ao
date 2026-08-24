@@ -10,6 +10,7 @@ function showTimeline(){
   state.currentId = null; state.currentLocId = null;
   mapView.style.display='none';
   document.getElementById('zoomCtrl').style.display='none';
+  document.getElementById('timelineSliderBar').classList.remove('show');
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('configView').classList.remove('show');

@@ -129,12 +129,14 @@ function showConfig(){
   state.currentId = null; state.currentLocId = null;
   mapView.style.display='none';
   document.getElementById('zoomCtrl').style.display='none';
+  document.getElementById('timelineSliderBar').classList.remove('show');
   detailView.classList.remove('show');
   document.getElementById('wikiView').classList.remove('show');
   document.getElementById('aboutView').classList.remove('show');
   document.getElementById('sourcesView').classList.remove('show');
   document.getElementById('timelineView').classList.remove('show');
   document.getElementById('archipelagosView').classList.remove('show');
+  document.getElementById('recentChangesView').classList.remove('show');
   document.getElementById('configView').classList.add('show');
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.remove('active'));
   trayEl.classList.remove('show');
@@ -219,15 +221,22 @@ async function renderConfigPanel(){
         <p class="config-hint"><b>Администратор</b> — полный доступ: настройки сайта, бэкапы,
         пользователи, «О системе». <b>Редактор</b> — может править контент (острова, локации,
         галерею, карту, фракции, украшения), но не видит эту панель и не может управлять
-        пользователями/бэкапами. Нельзя удалить последнего оставшегося пользователя и последнего
-        оставшегося администратора — если понадобится сбросить всех, это делается на сервере
-        командой <code>npm run reset-password</code>.</p>
+        пользователями/бэкапами. Роль меняется прямо в списке ниже; «Сбросить пароль» заставит
+        человека задать новый при следующем входе (например, если пароль мог стать известен
+        кому-то ещё) — доступ при этом не блокируется немедленно, только при следующем входе.
+        Нельзя удалить и нельзя понизить в роли последнего оставшегося администратора — если
+        понадобится сбросить всех, это делается на сервере командой <code>npm run reset-password</code>.</p>
         <div class="users-list" id="usersList">
           ${users.map(u=>`
             <div class="user-row">
               <span class="user-name">${escapeHtml(u.username)}${u.username===authStatus.username ? ' <em>(вы)</em>' : ''}</span>
-              <span class="user-role-badge user-role-${u.role}">${u.role==='admin' ? 'администратор' : 'редактор'}</span>
+              <select class="user-role-select" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}">
+                <option value="editor" ${u.role==='editor'?'selected':''}>редактор</option>
+                <option value="admin" ${u.role==='admin'?'selected':''}>администратор</option>
+              </select>
               <span class="user-date">с ${new Date(u.createdAt).toLocaleDateString('ru-RU')}</span>
+              ${u.mustChangePassword ? '<span class="user-reset-pending" title="При следующем входе потребуется сменить пароль">ожидает смены пароля</span>' : ''}
+              <button class="btn user-reset-pass" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}" title="Заставить сменить пароль при следующем входе">Сбросить пароль</button>
               ${users.length>1 ? `<button class="btn user-del" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}">Удалить</button>` : ''}
             </div>`).join('')}
         </div>
@@ -398,6 +407,45 @@ async function renderConfigPanel(){
       toast('Пользователь добавлен: '+username);
       renderConfigPanel();
     }catch(e){ toast('Ошибка: '+e.message); }
+  });
+
+  document.querySelectorAll('.user-role-select').forEach(sel=>{
+    const prevValue = sel.value;
+    sel.addEventListener('change', async ()=>{
+      const id = sel.dataset.userId;
+      const name = sel.dataset.userName;
+      const isSelf = name === authStatus.username;
+      const newRole = sel.value;
+      const label = newRole==='admin' ? 'администратора' : 'редактора';
+      if(!confirm(isSelf
+        ? `Сменить себе роль на «${label}»? Если это понижение — часть этой панели сразу станет недоступна.`
+        : `Сменить роль пользователя "${name}" на «${label}»?`)){
+        sel.value = prevValue;
+        return;
+      }
+      try{
+        await api('/auth/users/'+id, { method:'PATCH', body:{ role:newRole } });
+        toast('Роль обновлена: '+name);
+        if(isSelf) await updateAuthUI();
+        renderConfigPanel();
+      }catch(e){
+        toast('Ошибка: '+e.message);
+        sel.value = prevValue;
+      }
+    });
+  });
+
+  document.querySelectorAll('.user-reset-pass').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.userId;
+      const name = btn.dataset.userName;
+      if(!confirm(`Заставить пользователя "${name}" сменить пароль при следующем входе? Текущий пароль перестанет действовать только после смены — доступ не блокируется немедленно.`)) return;
+      try{
+        await api('/auth/users/'+id, { method:'PATCH', body:{ forcePasswordReset:true } });
+        toast('При следующем входе "'+name+'" потребуется сменить пароль');
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
+    });
   });
 
   document.querySelectorAll('.user-del').forEach(btn=>{

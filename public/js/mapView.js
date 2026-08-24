@@ -167,7 +167,13 @@ function renderMarkers(){
     if(!passesFilter(item)) return;
     placedCount++;
     const m = document.createElement('div');
-    const destroyed = item.year_disappeared != null;
+    // "уничтожен" — плоско (год задан, неважно какой) в режиме "показать
+    // все", но когда слайдер активен — сравниваем с его текущим годом:
+    // остров, который умрёт когда-то в будущем относительно выбранного
+    // года, там ещё жив и не должен выглядеть мёртвым
+    const destroyed = state.timelineShowAll || state.timelineYear==null
+      ? item.year_disappeared != null
+      : (item.year_disappeared != null && item.year_disappeared <= state.timelineYear);
     const fc = facClass(item.faction);
     m.className = 'marker' + (state.editorOn ? ' editable' : '') + (fc ? ' fac-'+fc : '') + (destroyed ? ' destroyed' : '');
     m.dataset.fac = item.faction;
@@ -442,8 +448,10 @@ function showMap(){
   document.getElementById('sourcesView').classList.remove('show');
   document.getElementById('timelineView').classList.remove('show');
   document.getElementById('archipelagosView').classList.remove('show');
+  document.getElementById('recentChangesView').classList.remove('show');
   mapView.style.display='block';
   document.getElementById('zoomCtrl').style.display='flex';
+  if(typeof renderTimelineSlider==='function') renderTimelineSlider();
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='map'));
   renderTray();
   if(pingId) setTimeout(()=> pingMarker(pingId), 0);

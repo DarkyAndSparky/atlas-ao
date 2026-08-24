@@ -244,6 +244,22 @@ CREATE VIRTUAL TABLE IF NOT EXISTS allods_fts USING fts5(
   name, description, history, plot,
   tokenize = 'unicode61 remove_diacritics 2'
 );
+
+-- Простая история правок — не полноценное версионирование (нет diff/отката,
+-- см. обсуждение роадмапа), просто полный JSON-снимок острова на каждый
+-- PATCH, чтобы был ответ на "пропало и не знаю, кто виноват". allod_id БЕЗ
+-- FK ON DELETE CASCADE намеренно — история должна пережить даже удаление
+-- самого острова (тот же принцип, что и у бэкапов: храним лишнее ради
+-- возможности потом разобраться, что случилось).
+CREATE TABLE IF NOT EXISTS allod_snapshots (
+  id TEXT PRIMARY KEY,
+  allod_id TEXT NOT NULL,
+  allod_name TEXT NOT NULL,
+  snapshot_json TEXT NOT NULL,
+  changed_by TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_allod_snapshots_allod ON allod_snapshots(allod_id, created_at DESC);
 `);
 
 const hasAllodsFtsTriggers = db.prepare(
