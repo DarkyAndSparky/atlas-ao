@@ -32,9 +32,14 @@ router.post('/allods', requireAuth, (req, res)=>{
   const name = (req.body.name||'').trim();
   if(!name) return res.status(400).json({ error: 'Название обязательно' });
   const id = 'allod_' + crypto.randomBytes(6).toString('hex');
-  db.prepare(`INSERT INTO allods (id, name, project, description, history)
-    VALUES (@id, @name, @project, '', '')`)
-    .run({ id, name, project: req.body.project || 'Аллоды Онлайн' });
+  const { uniqueSlug } = require('../slug');
+  const existingSlugs = new Set(
+    db.prepare("SELECT slug FROM allods WHERE slug IS NOT NULL AND TRIM(slug) <> ''").all().map(r=>r.slug)
+  );
+  const slug = uniqueSlug(name, existingSlugs);
+  db.prepare(`INSERT INTO allods (id, name, slug, project, description, history)
+    VALUES (@id, @name, @slug, @project, '', '')`)
+    .run({ id, name, slug, project: req.body.project || 'Аллоды Онлайн' });
   res.json(fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(id)));
 });
 

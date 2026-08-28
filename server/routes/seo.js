@@ -20,19 +20,25 @@ router.get('/robots.txt', (req, res)=>{
   }
 });
 
-// Минимальный sitemap.xml — пока только главная страница. Фронтенд сейчас
-// одностраничный без глубоких ссылок на конкретные острова (нет
-// hash-роутинга/history.pushState, см. public/js/main.js) — то есть у
-// отдельных островов нет собственного URL, который можно было бы положить
-// в sitemap. Если/когда появится deep-linking (?id=... или #/allod/...),
-// сюда же стоит добавить перечисление через db.prepare('SELECT id FROM allods').
+// Sitemap теперь перечисляет и страницы островов — раньше у них не было
+// собственного URL (весь фронтенд жил на "/"), с появлением роутинга
+// (public/js/router.js, /allod/:id/:slug) есть что класть в sitemap.
 router.get('/sitemap.xml', (req, res)=>{
+  const db = require('../db');
   const base = `${req.protocol}://${req.get('host')}`;
+  const staticPaths = ['/map', '/wiki', '/timeline', '/sources', '/archipelagos'];
+  let allodUrls = '';
+  try{
+    const rows = db.prepare("SELECT id, slug FROM allods WHERE slug IS NOT NULL AND TRIM(slug) <> ''").all();
+    allodUrls = rows.map(r=> `  <url><loc>${base}/allod/${r.id}/${r.slug}</loc></url>\n`).join('');
+  }catch(e){ /* БД недоступна — отдаём хотя бы статические разделы, не 500 */ }
   res.type('application/xml');
   res.send(
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     `  <url><loc>${base}/</loc></url>\n` +
+    staticPaths.map(p=> `  <url><loc>${base}${p}</loc></url>\n`).join('') +
+    allodUrls +
     '</urlset>\n'
   );
 });

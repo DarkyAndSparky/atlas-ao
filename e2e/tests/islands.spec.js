@@ -115,6 +115,7 @@ test.describe('Клик по тегу возвращает туда, откуд�
 
   test('из вики — фильтрует и остаётся в вики', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     const link = page.locator('.wiki-island-link').first();
     await link.click();
@@ -135,6 +136,7 @@ test.describe('Клик по тегу возвращает туда, откуд�
 
   test('фильтр из тега виден и сбрасывается прямо в вики (регрессия)', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     const link = page.locator('.wiki-island-link').first();
     await link.click();

@@ -55,6 +55,7 @@ test.describe('Глобальная карта', ()=>{
 
   test('переключатель Карта / Атлас островов работает в обе стороны', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#wikiView')).toHaveClass(/show/);
     await expect(page.locator('#mapView')).toBeHidden();
@@ -65,6 +66,7 @@ test.describe('Глобальная карта', ()=>{
 
   test('клик по бренду возвращает на карту из любого раздела', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#wikiView')).toHaveClass(/show/);
     await page.click('#brand');
@@ -94,6 +96,7 @@ test.describe('Глобальная карта', ()=>{
 
   test('переход из вики в карту через открытие острова тоже пингует его', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     const id = await page.evaluate(() => {
       const item = state.data.find(a => a.project === 'Аллоды Онлайн' && a.mapX != null && a.mapY != null)

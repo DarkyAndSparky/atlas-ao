@@ -36,6 +36,7 @@ function showWiki(){
   trayEl.classList.remove('show');
   updateDrawToolbarVisibility();
   renderWiki();
+  syncUrl();
 }
 
 function groupWikiData(){

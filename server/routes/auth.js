@@ -21,6 +21,39 @@ function requireAdmin(req, res, next){
   res.status(401).json({ error: 'Требуется вход в аккаунт редактора.' });
 }
 
+// Скоупинг прав по проекту — админы всегда видят/редактируют всё; у
+// редактора allowedProjects===null означает "без ограничений" (как было
+// раньше для всех, поведение по умолчанию не меняется для существующих
+// аккаунтов), непустой массив — редактировать можно только контент этих
+// проектов. Опирается на req.session (не перечитывает БД на каждый запрос,
+// тот же компромисс, что и у role — при живой смене прав другому
+// пользователю самому ему нужно перелогиниться, чтобы новые ограничения
+// вступили в силу; self-change применяется к своей сессии сразу, см. ниже).
+function hasProjectAccess(req, project){
+  if(!req.session) return false;
+  if(req.session.role === 'admin') return true;
+  if(req.session.allowedProjects == null) return true; // без ограничений
+  return req.session.allowedProjects.includes(project);
+}
+
+function requireProjectAccess(req, res, project){
+  if(hasProjectAccess(req, project)) return true;
+  res.status(403).json({ error: `Нет прав на редактирование проекта «${project}».` });
+  return false;
+}
+
+// null — без ограничений (по умолчанию); либо массив непустых строк.
+// Не проверяем, что строки совпадают с текущим списком PROJECTS — тот чисто
+// фронтенд-константа (см. public/js/projects.js), сервер про неё не знает
+// и специально не привязывается к её содержимому.
+function validateAllowedProjects(value){
+  if(value === null || value === undefined) return { value: null };
+  if(!Array.isArray(value) || !value.every(p => typeof p === 'string' && p.trim())){
+    return { error: 'allowedProjects должен быть массивом непустых строк или null.' };
+  }
+  return { value: value.length ? value : null }; // пустой массив == без ограничений, не "нет доступа никуда"
+}
+
 function countUsers(){
   return db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
 }

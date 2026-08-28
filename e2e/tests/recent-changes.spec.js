@@ -13,6 +13,7 @@ test.describe('Общий журнал изменений', ()=>{
   test('правка острова появляется в общем журнале со ссылкой на этот остров', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await page.locator('.wiki-island-link').first().click();
     const islandName = (await page.locator('h1[data-field="name"]').textContent()).trim();

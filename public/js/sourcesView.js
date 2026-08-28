@@ -32,6 +32,7 @@ function showSources(){
   trayEl.classList.remove('show');
   updateDrawToolbarVisibility();
   renderSourcesPage();
+  syncUrl();
 }
 
 // имя сущности по entity_type/entity_id — резолвится из уже загруженных
@@ -101,14 +102,63 @@ async function renderSourcesPage(){
   }).join('');
 }
 
+/* ---------------- форма источника: title/url/note одним окном ---------------- */
+let sourceFormOverlay, sourceFormResolve = null;
+function ensureSourceFormDom(){
+  if(sourceFormOverlay) return;
+  sourceFormOverlay = document.createElement('div');
+  sourceFormOverlay.className = 'modal-overlay';
+  sourceFormOverlay.innerHTML = `
+    <div class="modal-box" style="width:420px;">
+      <div class="modal-title">Источник</div>
+      <input class="ef-input sf-title" type="text" placeholder="Название (статья/тема)" autocomplete="off">
+      <input class="ef-input sf-url" type="text" placeholder="Ссылка (необязательно)" autocomplete="off" style="margin-top:8px;">
+      <textarea class="ef-input sf-note" placeholder="Заметка (необязательно)" rows="3" style="resize:vertical;margin-top:8px;"></textarea>
+      <div class="modal-actions">
+        <button class="field-cancel">Отмена</button>
+        <button class="field-save">Сохранить</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sourceFormOverlay);
+  const titleEl = sourceFormOverlay.querySelector('.sf-title');
+  const urlEl = sourceFormOverlay.querySelector('.sf-url');
+  const noteEl = sourceFormOverlay.querySelector('.sf-note');
+  const saveBtn = sourceFormOverlay.querySelector('.field-save');
+  const cancelBtn = sourceFormOverlay.querySelector('.field-cancel');
+  const close = (result)=>{
+    sourceFormOverlay.classList.remove('show');
+    if(sourceFormResolve){ const r = sourceFormResolve; sourceFormResolve = null; r(result); }
+  };
+  const submit = ()=>{
+    if(!titleEl.value.trim()) return;
+    close({ title: titleEl.value.trim(), url: urlEl.value.trim(), note: noteEl.value.trim() });
+  };
+  saveBtn.addEventListener('click', submit);
+  cancelBtn.addEventListener('click', ()=> close(null));
+  sourceFormOverlay.addEventListener('mousedown', e=>{ if(e.target===sourceFormOverlay) close(null); });
+  sourceFormOverlay.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ e.preventDefault(); close(null); }
+    if(e.key==='Enter' && e.target!==noteEl){ e.preventDefault(); submit(); }
+  });
+  sourceFormOverlay._els = { titleEl, urlEl, noteEl };
+}
+function sourceFormFlow(initial={}){
+  ensureSourceFormDom();
+  const { titleEl, urlEl, noteEl } = sourceFormOverlay._els;
+  titleEl.value = initial.title || '';
+  urlEl.value = initial.url || '';
+  noteEl.value = initial.note || '';
+  sourceFormOverlay.classList.add('show');
+  setTimeout(()=> titleEl.focus(), 0);
+  return new Promise(resolve=>{ sourceFormResolve = resolve; });
+}
+
 async function createSourceFlow(){
-  const title = prompt('Название источника (например, название статьи/темы):');
-  if(!title || !title.trim()) return null;
-  const url = prompt('Ссылка на источник (можно оставить пустым для оффлайн-источника):', 'https://');
-  if(url === null) return null;
-  const note = prompt('Заметка (необязательно):', '') || '';
+  const result = await sourceFormFlow({});
+  if(!result) return null;
   try{
-    const created = await api('/sources', { method:'POST', body:{ title: title.trim(), url: url.trim()||null, note: note.trim() } });
+    const created = await api('/sources', { method:'POST', body:{ title: result.title, url: result.url||null, note: result.note } });
     toast('Источник добавлен');
     return created;
   }catch(e){ toast('Ошибка: '+e.message); return null; }
@@ -118,21 +168,22 @@ async function editSourceFlow(sourceId){
   const sources = await loadSources();
   const s = sources.find(x=>x.id===sourceId);
   if(!s) return;
-  const title = prompt('Название источника:', s.title);
-  if(title === null) return;
-  const url = prompt('Ссылка:', s.url || '');
-  if(url === null) return;
-  const note = prompt('Заметка:', s.note || '');
-  if(note === null) return;
+  const result = await sourceFormFlow({ title:s.title, url:s.url, note:s.note });
+  if(!result) return;
   try{
-    await api(`/sources/${sourceId}`, { method:'PATCH', body:{ title: title.trim(), url: url.trim()||null, note: note.trim() } });
+    await api(`/sources/${sourceId}`, { method:'PATCH', body:{ title: result.title, url: result.url||null, note: result.note } });
     await loadSources(true);
     toast('Сохранено');
   }catch(e){ toast('Ошибка: '+e.message); }
 }
 
 async function deleteSourceFlow(sourceId){
-  if(!confirm('Удалить источник целиком? Все привязки к аллодам/локациям тоже пропадут. Это необратимо.')) return;
+  const ok = await confirmDialog({
+    title:'Удалить источник?',
+    message:'Все привязки к аллодам/локациям тоже пропадут. Это необратимо.',
+    confirmLabel:'Удалить', danger:true
+  });
+  if(!ok) return;
   try{
     await api(`/sources/${sourceId}`, { method:'DELETE' });
     await loadSources(true);
@@ -210,17 +261,20 @@ async function attachSourceFlow(entityType, entityId){
 
   let sourceId;
   if(available.length){
-    const list = available.map((s,i)=>`${i+1}. ${s.title}${s.url ? ' — '+s.url : ''}`).join('\n');
-    const answer = prompt(
-      `Выберите номер существующего источника, либо впишите название нового:\n\n${list}`
-    );
-    if(answer === null) return false;
-    const trimmed = answer.trim();
-    const asIndex = /^\d+$/.test(trimmed) ? parseInt(trimmed,10) : null;
-    if(asIndex && asIndex>=1 && asIndex<=available.length){
-      sourceId = available[asIndex-1].id;
+    const value = await pickFromList({
+      title: 'Прикрепить источник',
+      items: available.map(s=> `${s.title}${s.url ? ' — '+s.url : ''}`),
+      allowCreate: true,
+      createLabel: v=> `+ Создать источник «${v}»`,
+      placeholder: 'Название источника…'
+    });
+    if(value===null) return false;
+    const trimmed = value.trim();
+    const match = available.find(s=> `${s.title}${s.url ? ' — '+s.url : ''}` === value);
+    if(match){
+      sourceId = match.id;
     }else if(trimmed){
-      const url = prompt('Ссылка на источник (можно оставить пустым):', 'https://');
+      const url = await textPrompt({ title:'Ссылка на источник', placeholder:'https:// (можно оставить пустым)' });
       if(url === null) return false;
       try{
         const created = await api('/sources', { method:'POST', body:{ title: trimmed, url: url.trim()||null } });
@@ -235,7 +289,7 @@ async function attachSourceFlow(entityType, entityId){
     sourceId = created.id;
   }
 
-  const note = prompt('Заметка про это упоминание (необязательно — например, "описание климата взято отсюда"):', '') || '';
+  const note = (await textPrompt({ title:'Заметка о привязке', placeholder:'Например: «описание климата взято отсюда»' })) || '';
   try{
     await api('/source-refs', { method:'POST', body:{ sourceId, entityType, entityId, note: note.trim() } });
     await loadSources(true);

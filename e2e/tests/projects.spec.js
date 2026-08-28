@@ -28,6 +28,7 @@ test.describe('Переключатель проектов', ()=>{
 
   test('переключение проекта прямо на странице вики остаётся в вики и обновляет список (регрессия)', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#wikiView')).toHaveClass(/show/);
     const totalDefault = await page.locator('.wiki-island-link').count();

@@ -361,6 +361,37 @@ if(!locationCols.includes('mapX')){
   db.exec("ALTER TABLE locations ADD COLUMN mapY REAL");
 }
 
+// backfill slug для записей без него (созданы до этой фичи через UI, или
+// импортированы из старого экспорта без поля slug) — колонка в схеме
+// существует с самого начала для новых баз, но у по-настоящему старых баз
+// (до этой сессии) её ещё может не быть вовсе — добавляем при необходимости,
+// как и остальные миграции колонок выше. Транслитерация кириллицы в
+// латиницу, коллизии — суффиксом -2, -3... (см. slug.js). Идемпотентно:
+// строки с уже заполненным slug не трогает.
+{
+  if(!allodCols.includes('slug')){
+    console.log('Миграция: добавляю колонку slug в таблицу allods...');
+    db.exec('ALTER TABLE allods ADD COLUMN slug TEXT');
+  }
+  const { uniqueSlug } = require('./slug');
+  const needsSlug = db.prepare("SELECT id, name FROM allods WHERE slug IS NULL OR TRIM(slug) = ''").all();
+  if(needsSlug.length){
+    console.log(`Миграция: генерирую slug для ${needsSlug.length} остров(ов) без него...`);
+    const existing = new Set(
+      db.prepare("SELECT slug FROM allods WHERE slug IS NOT NULL AND TRIM(slug) <> ''").all().map(r=>r.slug)
+    );
+    const updateSlug = db.prepare('UPDATE allods SET slug=? WHERE id=?');
+    const tx = db.transaction((rows)=>{
+      rows.forEach(r=>{
+        const s = uniqueSlug(r.name, existing);
+        existing.add(s);
+        updateSlug.run(s, r.id);
+      });
+    });
+    tx(needsSlug);
+  }
+}
+
 // миграция: старые базы (до многопользовательских аккаунтов) хранили единственного
 // редактора в auth(id=1) без имени пользователя — переносим в users под именем
 // "admin" (хэш/соль переиспользуются как есть, алгоритм хэширования не поменялся)
@@ -385,6 +416,15 @@ if(userCols.length && !userCols.includes('role')){
 if(userCols.length && !userCols.includes('must_change_password')){
   console.log('Миграция: добавляю флаг обязательной смены пароля (существующие аккаунты — без принуждения)...');
   db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+}
+if(userCols.length && !userCols.includes('allowed_projects')){
+  console.log('Миграция: добавляю колонку allowed_projects (скоупинг прав редактора по проекту, NULL = без ограничений)...');
+  // NULL по умолчанию — все существующие аккаунты остаются без ограничений,
+  // как и было. Храним JSON-массив id проектов текстом, а не отдельную
+  // таблицу связей — проекты сами по себе не сущность в БД (см. PROJECTS в
+  // public/js/projects.js — чисто фронтенд-константа), заводить под них
+  // таблицу ради этого одного поля было бы избыточно.
+  db.exec('ALTER TABLE users ADD COLUMN allowed_projects TEXT');
 }
 
 // дефолтный аккаунт admin/admin0000 — защита от дурака: если на сервере

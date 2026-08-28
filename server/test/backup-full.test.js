@@ -50,7 +50,18 @@ let fullBackupBuffer;
 after(async ()=>{
   await new Promise(resolve => server.close(resolve));
   try{ require('../db').close(); }catch(e){ /* уже могла быть закрыта */ }
-  fs.rmSync(TEST_DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  // этот файл единственный, где соединение с БД пересоздаётся несколько раз
+  // подряд (freshApp() на каждый restore) — на Windows native-биндинг
+  // node:sqlite иногда не успевает отпустить файловый лок даже за
+  // 5×200мс повторов, которых достаточно везде в остальных тестах с одним
+  // соединением. Не бросаем ошибку из-за неубранной temp-папки — это не
+  // проверка корректности (сам restore-full к этому моменту уже отработал
+  // и проверен выше), а простая уборка мусора, ОС сама подчистит /tmp.
+  try{
+    fs.rmSync(TEST_DIR, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  }catch(e){
+    console.warn(`[backup-full.test.js] не удалось удалить временную папку ${TEST_DIR} (обычно из-за файлового лока на Windows) — не критично, тест уже прошёл: ${e.message}`);
+  }
 });
 
 before(async ()=>{

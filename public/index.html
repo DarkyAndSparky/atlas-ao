@@ -26,10 +26,16 @@
     <div id="projectSwitcher" class="project-switcher"></div>
     <div class="view-toggle" id="viewToggle">
       <button class="view-toggle-btn active" data-view="map">🗺️ Карта</button>
-      <button class="view-toggle-btn" data-view="wiki">📖 Атлас островов</button>
-      <button class="view-toggle-btn" data-view="sources">🔗 Источники</button>
-      <button class="view-toggle-btn" data-view="timeline">⏳ Хронология мира</button>
-      <button class="view-toggle-btn" data-view="archipelagos">🏝 Архипелаги</button>
+      <div class="view-toggle-dropdown" id="wikiDropdown">
+        <button class="view-toggle-btn view-toggle-dropdown-btn" id="wikiDropdownBtn" aria-haspopup="true" aria-expanded="false">📖 Вики ▾</button>
+        <div class="view-dropdown-menu" id="wikiDropdownMenu" role="menu" aria-label="Разделы вики">
+          <button class="view-toggle-btn" role="menuitem" data-view="wiki">📖 Атлас островов</button>
+          <button class="view-toggle-btn" role="menuitem" data-view="sources">🔗 Источники</button>
+          <button class="view-toggle-btn" role="menuitem" data-view="timeline">⏳ Хронология мира</button>
+          <button class="view-toggle-btn" role="menuitem" data-view="archipelagos">🏝 Архипелаги</button>
+          <button class="view-toggle-btn" role="menuitem" id="randomAllodBtn">🎲 Случайный остров</button>
+        </div>
+      </div>
     </div>
     <div id="searchWrap">
       <input id="searchbox" type="text" placeholder="Поиск аллода…" autocomplete="off">
@@ -186,7 +192,7 @@
 
   <div id="legalFooter">
     <span class="legal-text">Неофициальный фан-проект. Не связан с ASTRUM ENTERTAINMENT / ASTRUM LAB LLC и не претендует на официальность или точность — сведения собраны энтузиастами и могут быть неполными, устаревшими или содержать ошибки.</span>
-    <span class="legal-copy">© 2026 ASTRUM LAB LLC. Все права защищены.</span>
+    <span class="legal-copy">© 2026 ASTRUM LAB LLC. Все права защищены. Шрифт «Allods West» — © 2008 Zakhar Yaschin для Nival Online.</span>
     <div id="sysInfoStrip">
       <a id="sysInfoLicense" class="sys-info-item" href="/api/system/license" download title="Скачать текст лицензии">MIT</a>
       <span class="sys-info-sep">·</span>
@@ -202,6 +208,8 @@
   <div id="toast"><span id="toastMsg"></span><button id="toastUndo" class="toast-undo">Отменить</button></div>
 </div>
 
+<script src="js/router.js"></script>
+<script src="js/picker.js"></script>
 <script src="js/api.js"></script>
 <script src="js/state.js"></script>
 <script src="js/islandIcons.js"></script>
@@ -216,6 +224,7 @@
 <script src="js/archipelagosView.js"></script>
 <script src="js/recentChangesView.js"></script>
 <script src="js/timelineSlider.js"></script>
+<script src="js/wikiDropdown.js"></script>
 <script src="js/authUI.js"></script>
 <script src="js/annotations.js"></script>
 <script src="js/main.js"></script>

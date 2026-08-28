@@ -6,6 +6,7 @@ test.describe('Хронология', ()=>{
   test('мировая хронология пуста по умолчанию и позволяет добавить событие', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="timeline"]');
     await expect(page.locator('#timelineView')).toHaveClass(/show/);
 
@@ -21,8 +22,8 @@ test.describe('Хронология', ()=>{
   test('события сортируются по году на экране', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="timeline"]');
-
     let step = 0;
     let answers = ['Позднее событие', '900', ''];
     page.on('dialog', d => d.accept(answers[step++]));
@@ -43,6 +44,7 @@ test.describe('Хронология', ()=>{
   test('хронология аллода: добавление события на странице острова и удаление', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await page.locator('.wiki-island-link').first().click();
     await expect(page.locator('#detailView')).toHaveClass(/show/);

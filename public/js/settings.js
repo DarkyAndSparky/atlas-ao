@@ -142,6 +142,7 @@ function showConfig(){
   trayEl.classList.remove('show');
   updateDrawToolbarVisibility();
   renderConfigPanel();
+  syncUrl();
 }
 
 async function renderConfigPanel(){
@@ -417,9 +418,14 @@ async function renderConfigPanel(){
       const isSelf = name === authStatus.username;
       const newRole = sel.value;
       const label = newRole==='admin' ? 'администратора' : 'редактора';
-      if(!confirm(isSelf
-        ? `Сменить себе роль на «${label}»? Если это понижение — часть этой панели сразу станет недоступна.`
-        : `Сменить роль пользователя "${name}" на «${label}»?`)){
+      const ok = await confirmDialog({
+        title:'Сменить роль?',
+        message: isSelf
+          ? `Сменить себе роль на «${label}»? Если это понижение — часть этой панели сразу станет недоступна.`
+          : `Сменить роль пользователя «${name}» на «${label}»?`,
+        confirmLabel:'Сменить'
+      });
+      if(!ok){
         sel.value = prevValue;
         return;
       }
@@ -439,7 +445,12 @@ async function renderConfigPanel(){
     btn.addEventListener('click', async ()=>{
       const id = btn.dataset.userId;
       const name = btn.dataset.userName;
-      if(!confirm(`Заставить пользователя "${name}" сменить пароль при следующем входе? Текущий пароль перестанет действовать только после смены — доступ не блокируется немедленно.`)) return;
+      const ok = await confirmDialog({
+        title:'Сбросить пароль?',
+        message:`Пользователю «${name}» придётся сменить пароль при следующем входе. Текущий пароль перестанет действовать только после смены — доступ не блокируется немедленно.`,
+        confirmLabel:'Сбросить'
+      });
+      if(!ok) return;
       try{
         await api('/auth/users/'+id, { method:'PATCH', body:{ forcePasswordReset:true } });
         toast('При следующем входе "'+name+'" потребуется сменить пароль');
@@ -453,9 +464,14 @@ async function renderConfigPanel(){
       const id = btn.dataset.userId;
       const name = btn.dataset.userName;
       const isSelf = name === authStatus.username;
-      if(!confirm(isSelf
-        ? 'Удалить собственный аккаунт "'+name+'"? Вы сразу выйдете из системы.'
-        : 'Удалить пользователя "'+name+'"? Отменить это будет нельзя.')) return;
+      const ok = await confirmDialog({
+        title:'Удалить пользователя?',
+        message: isSelf
+          ? `Удалить собственный аккаунт «${name}»? Вы сразу выйдете из системы.`
+          : `Удалить пользователя «${name}»? Отменить это будет нельзя.`,
+        confirmLabel:'Удалить', danger:true
+      });
+      if(!ok) return;
       try{
         const result = await api('/auth/users/'+id, { method:'DELETE' });
         toast('Пользователь удалён: '+name);
@@ -496,7 +512,12 @@ async function renderConfigPanel(){
 
   document.querySelectorAll('.deco-del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      if(!confirm('Убрать украшение «'+btn.dataset.name+'» из библиотеки? Уже расставленные на карте копии не исчезнут.')) return;
+      const ok = await confirmDialog({
+        title:'Убрать украшение?',
+        message:`«${btn.dataset.name}» будет убрано из библиотеки. Уже расставленные на карте копии не исчезнут.`,
+        confirmLabel:'Убрать'
+      });
+      if(!ok) return;
       try{
         await api('/decorations/'+btn.dataset.id, { method:'DELETE' });
         toast('Украшение удалено');
@@ -557,7 +578,12 @@ async function renderConfigPanel(){
 
   document.querySelectorAll('.faction-del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      if(!confirm('Убрать иконку фракции «'+btn.dataset.name+'»? Уже показанные на страницах островов иконки перестанут отображаться.')) return;
+      const ok = await confirmDialog({
+        title:'Убрать иконку фракции?',
+        message:`«${btn.dataset.name}» — уже показанные на страницах островов иконки перестанут отображаться.`,
+        confirmLabel:'Убрать'
+      });
+      if(!ok) return;
       try{
         await api('/factions/'+btn.dataset.id, { method:'DELETE' });
         toast('Иконка фракции удалена');
@@ -597,7 +623,12 @@ async function renderConfigPanel(){
   document.getElementById('cfgRestoreFile').addEventListener('change', async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    if(!confirm('Заменить текущую базу данных содержимым файла "'+file.name+'"? Текущая база будет сохранена в backups/ на всякий случай, но после этого сервер нужно будет перезапустить вручную.')){
+    const ok = await confirmDialog({
+      title:'Заменить базу данных?',
+      message:`Текущая база будет заменена содержимым файла «${file.name}». Старая версия сохранится в backups/ на всякий случай, но после этого сервер нужно будет перезапустить вручную.`,
+      confirmLabel:'Заменить', danger:true
+    });
+    if(!ok){
       e.target.value=''; return;
     }
     const fd = new FormData();
@@ -616,8 +647,12 @@ async function renderConfigPanel(){
   document.getElementById('cfgRestoreFullFile').addEventListener('change', async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    if(!confirm('Заменить ВСЁ содержимое сайта (базу и все загруженные файлы) содержимым архива "'+file.name+'"? '
-      + 'Текущие база и файлы будут сохранены в backups/ на всякий случай, но после этого сервер нужно будет перезапустить вручную.')){
+    const ok = await confirmDialog({
+      title:'Заменить всё содержимое сайта?',
+      message:`База и все загруженные файлы будут заменены содержимым архива «${file.name}». Текущие данные сохранятся в backups/ на всякий случай, но после этого сервер нужно будет перезапустить вручную.`,
+      confirmLabel:'Заменить', danger:true
+    });
+    if(!ok){
       e.target.value=''; return;
     }
     const fd = new FormData();

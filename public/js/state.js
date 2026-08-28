@@ -27,6 +27,27 @@ const emptyHint = document.getElementById('emptyHint');
 /* ====================== SMALL SHARED HELPERS ====================== */
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+/* ---------------- лёгкая разметка для .prose (описание/история) ----------------
+   Хранится как обычный текст (**жирный**, *курсив*, @Название или @"Название в
+   несколько слов"), в режиме редактора показывается как есть (сырой текст —
+   его же и редактируют), а в просмотровом режиме прогоняется через parseProse()
+   и рендерится как HTML. Экранирование — ПЕРВЫМ шагом, разметка накладывается
+   уже поверх экранированной строки, так что никакой сырой HTML от пользователя
+   вставить нельзя — только наши <b>/<i>/<a>. */
+function parseProse(raw){
+  let html = escapeHtml(raw);
+  html = html.replace(/@"([^"]+)"|@(\S+)/g, (m, quoted, single)=>{
+    const name = (quoted || single || '').trim();
+    if(!name) return m;
+    const target = state.data.find(d=> d.name.toLowerCase() === name.toLowerCase());
+    if(!target) return m; // нет такого острова — оставляем как обычный текст, не ломаем
+    return `<a href="#" class="prose-tag-link" data-goto-allod="${target.id}">${escapeHtml(target.name)}</a>`;
+  });
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  html = html.replace(/\*([^*]+)\*/g, '<i>$1</i>');
+  return html;
+}
+
 function facClass(f){
   if(!f) return '';
   if(f.includes('Имперск')) return 'Имперский';
@@ -123,7 +144,10 @@ function makeDragGhost(html, className){
 let toastTimer;
 // toast(msg) — просто уведомление.
 // toast(msg, undoFn) — уведомление с кнопкой «Отменить», вызывающей undoFn().
-function toast(msg, undoFn){
+// toast(msg, undoFn, durationMs) — своя длительность показа (по умолчанию
+// 1600мс, или 4000мс если есть кнопка отмены) — для инструкций подлиннее
+// текста дефолта не хватает на прочтение.
+function toast(msg, undoFn, durationMs){
   const t = document.getElementById('toast');
   const undoBtn = document.getElementById('toastUndo');
   document.getElementById('toastMsg').textContent = msg;
@@ -139,7 +163,7 @@ function toast(msg, undoFn){
     };
   }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>t.classList.remove('show'), undoFn ? 4000 : 1600);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), durationMs || (undoFn ? 4000 : 1600));
 }
 
 /* ====================== RESPONSIVE TOPBAR HEIGHT ======================

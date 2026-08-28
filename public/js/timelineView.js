@@ -21,6 +21,7 @@ function showTimeline(){
   trayEl.classList.remove('show');
   updateDrawToolbarVisibility();
   renderTimelinePage();
+  syncUrl();
 }
 
 async function renderTimelinePage(){
@@ -70,17 +71,86 @@ function timelineEventHtml(ev){
   `;
 }
 
+/* ---------------- форма события: title/year/description с live-валидацией ----------------
+   Раньше три подряд prompt() без общей валидации — если год ввели не числом,
+   пользователь узнавал об этом только после трёх окон и терял title/description,
+   набранные до этого. Теперь одна форма, Save недоступен пока год не целое число. */
+let eventFormOverlay, eventFormResolve = null;
+function ensureEventFormDom(){
+  if(eventFormOverlay) return;
+  eventFormOverlay = document.createElement('div');
+  eventFormOverlay.className = 'modal-overlay'; // переиспользуем общие стили модалок
+  eventFormOverlay.innerHTML = `
+    <div class="modal-box" style="width:420px;">
+      <div class="modal-title">Событие хронологии</div>
+      <input class="ef-input ef-title" type="text" placeholder="Название события" autocomplete="off">
+      <input class="ef-input ef-year" type="text" placeholder="Год (целое число)" autocomplete="off" style="margin-top:8px;">
+      <div class="ef-year-err" style="font-family:var(--ui);font-size:11px;color:var(--imperial);min-height:14px;margin-top:3px;"></div>
+      <textarea class="ef-input ef-desc" placeholder="Описание (необязательно)" rows="4"
+        style="resize:vertical;margin-top:4px;"></textarea>
+      <div class="modal-actions">
+        <button class="field-cancel">Отмена</button>
+        <button class="field-save">Сохранить</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(eventFormOverlay);
+  const titleEl = eventFormOverlay.querySelector('.ef-title');
+  const yearEl = eventFormOverlay.querySelector('.ef-year');
+  const yearErrEl = eventFormOverlay.querySelector('.ef-year-err');
+  const descEl = eventFormOverlay.querySelector('.ef-desc');
+  const saveBtn = eventFormOverlay.querySelector('.field-save');
+  const cancelBtn = eventFormOverlay.querySelector('.field-cancel');
+
+  const validate = ()=>{
+    const yearOk = /^-?\d+$/.test(yearEl.value.trim());
+    yearErrEl.textContent = (yearEl.value.trim() && !yearOk) ? 'Год должен быть целым числом' : '';
+    const ok = titleEl.value.trim() && yearOk;
+    saveBtn.disabled = !ok;
+    saveBtn.style.opacity = ok ? '1' : '0.4';
+    saveBtn.style.cursor = ok ? 'pointer' : 'default';
+    return ok;
+  };
+  titleEl.addEventListener('input', validate);
+  yearEl.addEventListener('input', validate);
+  eventFormOverlay._validate = validate;
+  eventFormOverlay._els = { titleEl, yearEl, descEl, saveBtn };
+
+  const close = (result)=>{
+    eventFormOverlay.classList.remove('show');
+    if(eventFormResolve){ const r = eventFormResolve; eventFormResolve = null; r(result); }
+  };
+  cancelBtn.addEventListener('click', ()=> close(null));
+  saveBtn.addEventListener('click', ()=>{
+    if(!validate()) return;
+    close({ title: titleEl.value.trim(), year: parseInt(yearEl.value.trim(),10), description: descEl.value.trim() });
+  });
+  eventFormOverlay.addEventListener('mousedown', e=>{ if(e.target===eventFormOverlay) close(null); });
+  eventFormOverlay.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ e.preventDefault(); close(null); }
+    if(e.key==='Enter' && e.target!==descEl){ e.preventDefault(); if(validate()) saveBtn.click(); }
+  });
+}
+
+function eventFormFlow(initial={}){
+  ensureEventFormDom();
+  const { titleEl, yearEl, descEl } = eventFormOverlay._els;
+  titleEl.value = initial.title || '';
+  yearEl.value = initial.year!=null ? String(initial.year) : '';
+  descEl.value = initial.description || '';
+  eventFormOverlay._validate();
+  eventFormOverlay.classList.add('show');
+  setTimeout(()=> titleEl.focus(), 0);
+  return new Promise(resolve=>{ eventFormResolve = resolve; });
+}
+
 async function createEventFlow({ scope, allodId }){
-  const title = prompt('Название события:');
-  if(!title || !title.trim()) return null;
-  const yearAnswer = prompt('Год (целое число):');
-  if(yearAnswer === null) return null;
-  const year = parseInt(yearAnswer.trim(), 10);
-  if(!Number.isInteger(year)){ toast('Год должен быть целым числом'); return null; }
-  const description = prompt('Описание события (необязательно):', '') || '';
+  const result = await eventFormFlow({});
+  if(!result) return null;
   try{
-    const body = { scope, year, title: title.trim(), description: description.trim() };
+    const body = { scope, year: result.year, title: result.title, description: result.description };
     if(scope==='allod') body.allodId = allodId;
+    else body.project = state.project; // иначе мировое событие всегда уходит в дефолтный "Аллоды Онлайн", даже если открыт другой проект
     const created = await api('/timeline', { method:'POST', body });
     toast('Событие добавлено');
     return created;
@@ -88,23 +158,18 @@ async function createEventFlow({ scope, allodId }){
 }
 
 async function editEventFlow(ev){
-  const title = prompt('Название события:', ev.title);
-  if(title === null) return null;
-  const yearAnswer = prompt('Год:', String(ev.year));
-  if(yearAnswer === null) return null;
-  const year = parseInt(yearAnswer.trim(), 10);
-  if(!Number.isInteger(year)){ toast('Год должен быть целым числом'); return null; }
-  const description = prompt('Описание:', ev.description || '');
-  if(description === null) return null;
+  const result = await eventFormFlow({ title: ev.title, year: ev.year, description: ev.description });
+  if(!result) return null;
   try{
-    const updated = await api(`/timeline/${ev.id}`, { method:'PATCH', body:{ title: title.trim(), year, description: description.trim() } });
+    const updated = await api(`/timeline/${ev.id}`, { method:'PATCH', body:{ title: result.title, year: result.year, description: result.description } });
     toast('Сохранено');
     return updated;
   }catch(e){ toast('Ошибка: '+e.message); return null; }
 }
 
 async function deleteEventFlow(id){
-  if(!confirm('Удалить это событие хронологии? Это необратимо.')) return false;
+  const ok = await confirmDialog({ title:'Удалить событие?', message:'Это необратимо.', confirmLabel:'Удалить', danger:true });
+  if(!ok) return false;
   try{
     await api(`/timeline/${id}`, { method:'DELETE' });
     toast('Событие удалено');

@@ -23,6 +23,7 @@ function showRecentChanges(){
   trayEl.classList.remove('show');
   updateDrawToolbarVisibility();
   renderRecentChangesPage();
+  syncUrl();
 }
 
 async function renderRecentChangesPage(){

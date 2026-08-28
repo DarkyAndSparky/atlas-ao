@@ -19,6 +19,7 @@ async function boot(){
   await loadSiteSettings();
   await updateAuthUI();
   loadPublicSystemInfo();
+  initRouter(); // применяем текущий URL (прямая ссылка на остров/вики/итд или F5) после того, как данные и авторизация уже готовы
 }
 
 function showServerOfflineMessage(){
@@ -79,6 +80,7 @@ function showAbout(){
   trayEl.classList.remove('show');
   updateDrawToolbarVisibility();
   renderAboutPanel();
+  syncUrl();
 }
 
 function aboutBreadcrumb(){
@@ -159,7 +161,8 @@ async function renderAboutPanel(){
         </p>
         <p class="about-copyright">
           © 2026 ASTRUM LAB LLC. Все права защищены.<br>
-          Все товарные знаки являются собственностью их правообладателей.
+          Все товарные знаки являются собственностью их правообладателей.<br>
+          Шрифт «Allods West» — © 2008 Zakhar Yaschin для Nival Online. Все права защищены.
         </p>
         <p class="about-author" style="margin-top:10px;">
           Автор: <a href="https://www.linkedin.com/in/tarentiev-makar/" target="_blank" rel="noopener">Макар Терентьев</a>

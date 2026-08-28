@@ -252,6 +252,16 @@ document.querySelectorAll('.draw-tool').forEach(btn=>{
     }else{
       decoPicker.classList.add('hidden');
     }
+    // подсказки в моменте — раньше единственным местом объяснения было
+    // название инструмента (title на кнопке, наводят мышью единицы). Без
+    // этого многоугольник выглядел как "рисует бесконечные линии и только
+    // сброс" — на деле клик за кликом добавляет точку, просто не видно,
+    // чем закончить.
+    if(state.drawTool==='polygon'){
+      toast('Кликайте, чтобы добавить точки. Двойной клик или Enter — завершить фигуру, Esc — отменить.', null, 5000);
+    }else if(state.drawTool==='freehand'){
+      toast('Зажмите и ведите мышью, отпустите — фигура готова.', null, 3000);
+    }
   });
 });
 document.querySelectorAll('.draw-color').forEach(btn=>{
@@ -289,7 +299,8 @@ annotLayer.addEventListener('click', async ev=>{
   if(state.drawTool !== 'erase') return;
   const el = ev.target.closest('.annot-el');
   if(!el || !el.dataset.id) return;
-  if(!confirm('Удалить эту пометку с карты?')) return;
+  const ok = await confirmDialog({ title:'Удалить пометку?', message:'Пометка будет убрана с карты.', confirmLabel:'Удалить', danger:true });
+  if(!ok) return;
   const a = annotationById(el.dataset.id);
   try{
     await api('/annotations/'+el.dataset.id, { method:'DELETE' });
@@ -343,7 +354,14 @@ function applyOffsetToEl(el, a, dx, dy){
 }
 
 annotLayer.addEventListener('mousedown', ev=>{
-  if(!state.editorOn || state.drawTool) return; // инструмент рисования/стирания активен — не двигаем
+  // раньше двигать существующую пометку можно было только при ВЫКЛЮЧЕННОМ
+  // инструменте — но после создания текстовой подписи инструмент "Текст"
+  // остаётся выбранным (чтобы можно было писать следующую подряд), и клик
+  // по только что созданному тексту молча ничего не делал — выглядело как
+  // "текст съело". Теперь перетаскивание существующей фигуры имеет
+  // приоритет над рисованием новой при любом активном инструменте, кроме
+  // ластика (у него свой смысл клика — удаление, см. обработчик выше).
+  if(!state.editorOn || state.drawTool==='erase') return;
   const el = ev.target.closest('.annot-el');
   if(!el || !el.dataset.id) return;
   const a = annotationById(el.dataset.id);
@@ -459,8 +477,9 @@ mapView.addEventListener('mousedown', ev=>{
   const p = worldPoint(ev.clientX, ev.clientY);
 
   if(state.drawTool==='text'){
-    const text = prompt('Текст подписи на карте:');
-    if(text && text.trim()) createAnnotation({ type:'text', x1:p.x, y1:p.y, text: text.trim() });
+    textPrompt({ title:'Подпись на карте', placeholder:'Текст подписи', required:true }).then(text=>{
+      if(text && text.trim()) createAnnotation({ type:'text', x1:p.x, y1:p.y, text: text.trim() });
+    });
     return;
   }
   if(state.drawTool==='icon'){

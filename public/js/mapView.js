@@ -230,7 +230,12 @@ function renderTray(){
     el.appendChild(small);
     startPointerDrag(el, {
       onStart: ()=> makeDragGhost(escapeHtml(item.name)),
-      onEnd: async (x, y)=>{
+      onEnd: async (x, y, ev, moved)=>{
+        // без реального перетаскивания (просто клик/тап по элементу лотка)
+        // остров размещать не нужно — иначе, так как лоток лежит поверх
+        // карты визуально, обычный клик по названию острова в списке
+        // неразмещённых сам ставил его в ту же точку экрана, где стоит текст
+        if(!moved) return;
         const rect = mapView.getBoundingClientRect();
         // палец/курсор должен быть отпущен именно над картой
         if(x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
@@ -269,7 +274,7 @@ document.getElementById('drawToggleBtn').addEventListener('click', ()=>{
 });
 
 document.getElementById('addAllodBtn').addEventListener('click', async ()=>{
-  const name = prompt('Название нового острова:');
+  const name = await textPrompt({ title:'Новый остров', placeholder:'Название острова', required:true });
   if(!name || !name.trim()) return;
   try{
     const created = await api('/allods', { method:'POST', body:{ name: name.trim(), project: state.project } });
@@ -309,6 +314,11 @@ function makeMarkerDraggable(el, item){
   }
 
   el.addEventListener('mousedown', ev=>{
+    // с активным инструментом рисования клик по маркеру/рядом с ним не
+    // должен двигать сам остров — раньше это никак не проверялось, и
+    // рисование чего-либо поверх/около острова вместо фигуры на карте
+    // молча перетаскивало сам остров
+    if(state.drawTool) return;
     ev.stopPropagation();
     begin(ev.clientX, ev.clientY);
     const onMove = mev=> move(mev.clientX, mev.clientY);
@@ -322,6 +332,7 @@ function makeMarkerDraggable(el, item){
   });
 
   el.addEventListener('touchstart', ev=>{
+    if(state.drawTool) return;
     ev.stopPropagation();
     const t = ev.touches[0];
     begin(t.clientX, t.clientY);
@@ -455,6 +466,7 @@ function showMap(){
   document.querySelectorAll('.view-toggle-btn').forEach(b=> b.classList.toggle('active', b.dataset.view==='map'));
   renderTray();
   if(pingId) setTimeout(()=> pingMarker(pingId), 0);
+  syncUrl();
 }
 
 // «Пинг» — острову, со страницы которого только что ушли, на карте моргает
@@ -478,8 +490,12 @@ function pingMarker(id){
 function cssEscape(s){
   return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&');
 }
-document.getElementById('brand').addEventListener('click', showMap);
-document.querySelectorAll('.view-toggle-btn').forEach(btn=>{
+document.getElementById('brand').addEventListener('click', showWiki);
+// [data-view] — исключает триггер выпадающего меню "Вики ▾" (у него своя
+// собственная логика открытия/закрытия в wikiDropdown.js, не переход по
+// разделу): без этого условия клик по триггеру попадал бы в ветку else и
+// улетал на showWiki() каждый раз при открытии/закрытии меню.
+document.querySelectorAll('.view-toggle-btn[data-view]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     if(btn.dataset.view==='map') showMap();
     else if(btn.dataset.view==='sources') showSources();

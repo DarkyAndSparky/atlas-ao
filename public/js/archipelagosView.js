@@ -34,6 +34,7 @@ function showArchipelagos(){
   trayEl.classList.remove('show');
   updateDrawToolbarVisibility();
   renderArchipelagosPage();
+  syncUrl();
 }
 
 async function renderArchipelagosPage(){
@@ -48,7 +49,7 @@ async function renderArchipelagosPage(){
   `;
   if(state.editorOn){
     document.getElementById('addArchipelagoBtn').addEventListener('click', async ()=>{
-      const name = prompt('Название нового архипелага:');
+      const name = await textPrompt({ title:'Новый архипелаг', placeholder:'Название архипелага', required:true });
       if(!name || !name.trim()) return;
       try{
         await api('/archipelagos', { method:'POST', body:{ name: name.trim(), project: state.project } });
@@ -93,7 +94,7 @@ document.getElementById('archipelagosView').addEventListener('click', async (ev)
   if(ev.target.closest('[data-action="rename-archipelago"]')){
     const archs = await loadArchipelagos();
     const a = archs.find(x=>x.id===id);
-    const name = prompt('Новое название архипелага:', a ? a.name : '');
+    const name = await textPrompt({ title:'Переименовать архипелаг', initialValue: a ? a.name : '', required:true });
     if(!name || !name.trim()) return;
     try{
       await api(`/archipelagos/${id}`, { method:'PATCH', body:{ name: name.trim() } });
@@ -101,7 +102,8 @@ document.getElementById('archipelagosView').addEventListener('click', async (ev)
       renderArchipelagosPage();
     }catch(e){ toast('Ошибка: '+e.message); }
   }else if(ev.target.closest('[data-action="delete-archipelago"]')){
-    if(!confirm('Удалить архипелаг? Острова не удалятся, только открепятся от него.')) return;
+    const ok = await confirmDialog({ title:'Удалить архипелаг?', message:'Острова не удалятся, только открепятся от него.', confirmLabel:'Удалить', danger:true });
+    if(!ok) return;
     try{
       await api(`/archipelagos/${id}`, { method:'DELETE' });
       await loadArchipelagos(true);
@@ -116,17 +118,20 @@ async function attachToArchipelagoFlow(allodId){
   const archs = await loadArchipelagos(true);
   let body;
   if(archs.length){
-    const list = archs.map((a,i)=>`${i+1}. ${a.name} (${a.members.length})`).join('\n');
-    const answer = prompt(`Выберите номер существующего архипелага, либо впишите название нового:\n\n${list}`);
-    if(answer === null) return false;
-    const trimmed = answer.trim();
-    if(!trimmed) return false;
-    const asIndex = /^\d+$/.test(trimmed) ? parseInt(trimmed,10) : null;
-    body = (asIndex && asIndex>=1 && asIndex<=archs.length)
-      ? { allodIds: [allodId], archipelagoId: archs[asIndex-1].id }
-      : { allodIds: [allodId], name: trimmed };
+    const value = await pickFromList({
+      title: 'Прикрепить к архипелагу',
+      items: archs.map(a=> `${a.name} (${a.members.length})`),
+      allowCreate: true,
+      createLabel: v=> `+ Создать архипелаг «${v}»`,
+      placeholder: 'Название архипелага…'
+    });
+    if(value===null || !value.trim()) return false;
+    const match = archs.find(a=> `${a.name} (${a.members.length})` === value);
+    body = match
+      ? { allodIds: [allodId], archipelagoId: match.id }
+      : { allodIds: [allodId], name: value.trim() };
   }else{
-    const name = prompt('Название нового архипелага:');
+    const name = await textPrompt({ title:'Новый архипелаг', placeholder:'Название архипелага', required:true });
     if(!name || !name.trim()) return false;
     body = { allodIds: [allodId], name: name.trim() };
   }
@@ -186,7 +191,7 @@ async function renderArchipelagoControl(item){
       return;
     }
     if(sel.value === '__new__'){
-      const name = prompt('Название нового архипелага:');
+      const name = await textPrompt({ title:'Новый архипелаг', placeholder:'Название архипелага', required:true });
       if(!name || !name.trim()){ sel.value = prevValue; return; }
       try{
         const res = await api('/archipelagos/assign', { method:'POST', body:{ allodIds:[item.id], name: name.trim() } });
@@ -248,17 +253,20 @@ function renderMapSelectionPanel(){
     const archs = await loadArchipelagos(true);
     let body;
     if(archs.length){
-      const list = archs.map((a,i)=>`${i+1}. ${a.name} (${a.members.length})`).join('\n');
-      const answer = prompt(`Собрать ${ids.length} остров(ов) в архипелаг — номер существующего или название нового:\n\n${list}`);
-      if(answer === null) return;
-      const trimmed = answer.trim();
-      if(!trimmed) return;
-      const asIndex = /^\d+$/.test(trimmed) ? parseInt(trimmed,10) : null;
-      body = (asIndex && asIndex>=1 && asIndex<=archs.length)
-        ? { allodIds: ids, archipelagoId: archs[asIndex-1].id }
-        : { allodIds: ids, name: trimmed };
+      const value = await pickFromList({
+        title: `Собрать ${ids.length} остров(ов) в архипелаг`,
+        items: archs.map(a=> `${a.name} (${a.members.length})`),
+        allowCreate: true,
+        createLabel: v=> `+ Создать архипелаг «${v}»`,
+        placeholder: 'Название архипелага…'
+      });
+      if(value===null || !value.trim()) return;
+      const match = archs.find(a=> `${a.name} (${a.members.length})` === value);
+      body = match
+        ? { allodIds: ids, archipelagoId: match.id }
+        : { allodIds: ids, name: value.trim() };
     }else{
-      const name = prompt(`Название нового архипелага для ${ids.length} остров(ов):`);
+      const name = await textPrompt({ title:`Новый архипелаг для ${ids.length} остров(ов)`, placeholder:'Название архипелага', required:true });
       if(!name || !name.trim()) return;
       body = { allodIds: ids, name: name.trim() };
     }

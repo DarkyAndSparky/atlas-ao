@@ -5,6 +5,7 @@ test.describe('История правок', ()=>{
 
   test('гость не видит секцию истории на странице острова', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await page.locator('.wiki-island-link').first().click();
     await expect(page.locator('#detailView')).toHaveClass(/show/);
@@ -14,6 +15,7 @@ test.describe('История правок', ()=>{
   test('после правки описания в истории появляется запись, "Посмотреть" раскрывает старое значение', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await page.locator('.wiki-island-link').first().click();
 

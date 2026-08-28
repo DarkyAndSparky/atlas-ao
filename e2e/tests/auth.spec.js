@@ -49,6 +49,7 @@ test.describe('Вход и редактор', ()=>{
   test('выход из аккаунта на странице вики не перекидывает на карту (регрессия)', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#wikiView')).toHaveClass(/show/);
 

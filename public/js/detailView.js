@@ -19,6 +19,7 @@ function openDetail(id, locId=null){
   renderDetail();
   renderTray();
   detailView.scrollTop=0;
+  syncUrl();
 }
 
 /* ====================== DETAIL RENDERING ====================== */
@@ -36,6 +37,7 @@ function renderDetail(){
         / ${escapeHtml(item.name)}
       </div>
       <h1 contenteditable="${state.editorOn}" data-field="name">${escapeHtml(item.name)}</h1>
+      ${state.editorOn ? `<div class="field-actions" data-for="name"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
       <button class="del-allod editor-hidden" id="delAllodBtn" title="Удалить остров">✕ Удалить остров</button>
       ${item.year_disappeared!=null ? `<div class="destroyed-banner">⚰ Остров уничтожен в ${escapeHtml(String(item.year_disappeared))} году</div>` : ''}
       <div class="tag-row">
@@ -51,13 +53,17 @@ function renderDetail(){
         <div>
           <div class="section">
             <div class="section-label">Описание</div>
+            ${state.editorOn ? `<div class="prose-toolbar" data-for="description"><button data-md="**" title="Жирный">Ж</button><button data-md="*" title="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)">@</button></div>` : ''}
             <div class="prose ${item.description?'':'empty'}" data-empty="Описание ещё не добавлено — включите редактор, чтобы написать его."
-                 contenteditable="${state.editorOn}" data-field="description">${escapeHtml(item.description)}</div>
+                 contenteditable="${state.editorOn}" data-field="description">${state.editorOn ? escapeHtml(item.description) : parseProse(item.description)}</div>
+            ${state.editorOn ? `<div class="field-actions" data-for="description"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
           </div>
           <div class="section">
             <div class="section-label">История</div>
+            ${state.editorOn ? `<div class="prose-toolbar" data-for="history"><button data-md="**" title="Жирный">Ж</button><button data-md="*" title="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)">@</button></div>` : ''}
             <div class="prose ${item.history?'':'empty'}" data-empty="История аллода ещё не записана."
-                 contenteditable="${state.editorOn}" data-field="history">${escapeHtml(item.history)}</div>
+                 contenteditable="${state.editorOn}" data-field="history">${state.editorOn ? escapeHtml(item.history) : parseProse(item.history)}</div>
+            ${state.editorOn ? `<div class="field-actions" data-for="history"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
           </div>
           <div class="section">
             <div class="section-label">Галерея</div>
@@ -92,6 +98,7 @@ function renderDetail(){
     </div>
   `;
   bindEditableFields(item);
+  bindProseToolbars(detailView);
   renderGallery(item.gallery, 'galleryWrap', 'allod', item.id,
     async (galId)=>{ await api(`/gallery/${galId}`, {method:'DELETE'}); item.gallery = item.gallery.filter(g=>g.id!==galId); renderDetail(); },
     async (result)=>{ item.gallery.push(result); renderDetail(); }
@@ -107,7 +114,7 @@ function renderDetail(){
   renderArchipelagoControl(item);
   if(state.editorOn) document.getElementById('addLocBtn').classList.remove('editor-hidden');
   document.getElementById('addLocBtn').onclick = async ()=>{
-    const name = prompt('Название локации:');
+    const name = await textPrompt({ title:'Новая локация', placeholder:'Название локации', required:true });
     if(!name) return;
     try{
       const updated = await api(`/allods/${item.id}/locations`, { method:'POST', body:{ name } });
@@ -117,7 +124,12 @@ function renderDetail(){
   };
   if(state.editorOn) document.getElementById('delAllodBtn').classList.remove('editor-hidden');
   document.getElementById('delAllodBtn').onclick = async ()=>{
-    if(!confirm('Удалить остров "'+item.name+'" целиком, вместе со всеми локациями и галереей? Это необратимо.')) return;
+    const ok = await confirmDialog({
+      title:'Удалить остров?',
+      message:`«${item.name}» будет удалён целиком, вместе со всеми локациями и галереей. Это необратимо.`,
+      confirmLabel:'Удалить', danger:true
+    });
+    if(!ok) return;
     try{
       await api(`/allods/${item.id}`, { method:'DELETE' });
       state.data = state.data.filter(d=>d.id!==item.id);
@@ -161,7 +173,7 @@ function sidebarFact(label, value, editField){
 async function editPlainField(field, label){
   const item = byId(state.currentId);
   if(!item) return;
-  const answer = prompt(`${label}:`, item[field] || '');
+  const answer = await textPrompt({ title:`Изменить «${label}»`, initialValue: item[field] || '', placeholder: label });
   if(answer===null) return;
   const value = answer.trim();
   try{
@@ -196,7 +208,7 @@ function renderProjectControl(item){
   sel.addEventListener('change', async ()=>{
     let newProject = sel.value;
     if(newProject==='__new__'){
-      const name = prompt('Название нового проекта:');
+      const name = await textPrompt({ title:'Новый проект', placeholder:'Название проекта', required:true });
       if(!name || !name.trim()){ sel.value = currentValue; return; }
       newProject = name.trim();
     }
@@ -253,9 +265,13 @@ function renderIconControl(item){
   }
 }
 
-function openIconSetMenu(item){
-  const choice = confirm('Загрузить файл иконки с компьютера? (OK — файл, Отмена — вставить ссылку)');
-  if(choice){
+async function openIconSetMenu(item){
+  const useFile = await confirmDialog({
+    title:'Установить иконку острова',
+    message:'Загрузить файл с компьютера или вставить ссылку на изображение?',
+    confirmLabel:'Файл с компьютера', cancelLabel:'Вставить ссылку'
+  });
+  if(useFile){
     const input = document.createElement('input');
     input.type='file'; input.accept='image/*';
     input.onchange = async ()=>{
@@ -272,7 +288,7 @@ function openIconSetMenu(item){
     };
     input.click();
   }else{
-    const url = prompt('Ссылка на иконку (URL):');
+    const url = await textPrompt({ title:'Ссылка на иконку', placeholder:'https://…', required:true });
     if(!url) return;
     item.icon_url = url.trim();
     api(`/allods/${item.id}`, { method:'PATCH', body:{ icon_url: url.trim() } })
@@ -319,23 +335,16 @@ async function editTagField(field){
   const item = byId(state.currentId);
   if(!item) return;
   const existing = [...new Set(state.data.map(d=>d[field]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
-  let value;
-  if(existing.length){
-    const list = existing.map((v,i)=>`${i+1}. ${v}`).join('\n');
-    const label = TAG_FIELD_LABELS[field] || field;
-    const answer = prompt(
-      `Выберите номер уже существующего значения для поля «${label}», либо впишите новое (пусто — очистить поле):\n\n${list}`,
-      item[field] || ''
-    );
-    if(answer===null) return; // отмена
-    const trimmed = answer.trim();
-    const asIndex = /^\d+$/.test(trimmed) ? parseInt(trimmed,10) : null;
-    value = (asIndex && asIndex>=1 && asIndex<=existing.length) ? existing[asIndex-1] : trimmed;
-  }else{
-    const answer = prompt(`Введите значение для поля «${TAG_FIELD_LABELS[field]||field}»:`, item[field] || '');
-    if(answer===null) return;
-    value = answer.trim();
-  }
+  const label = TAG_FIELD_LABELS[field] || field;
+  const value = await pickFromList({
+    title: `Изменить ${label}`,
+    items: existing,
+    allowCreate: true,
+    passEmpty: true,
+    initialValue: item[field] || '',
+    placeholder: `Введите или выберите ${label}…`
+  });
+  if(value===null) return; // отмена
   try{
     await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: value || null } });
     item[field] = value || null;
@@ -379,54 +388,37 @@ function renderLocations(item){
         <div class="loc-name" contenteditable="${state.editorOn}" data-loc-field="name">${escapeHtml(loc.name)}</div>
         <button class="del">✕</button>
       </div>
+      ${state.editorOn ? `<div class="field-actions" data-for="loc-name-${loc.id}"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
+      ${state.editorOn ? `<div class="prose-toolbar" data-for="loc-desc-${loc.id}"><button data-md="**" title="Жирный">Ж</button><button data-md="*" title="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров">@</button></div>` : ''}
       <div class="prose loc-desc ${loc.description?'':'empty'}" data-empty="Описание локации ещё не добавлено."
-           contenteditable="${state.editorOn}" data-loc-field="description">${escapeHtml(loc.description)}</div>
+           contenteditable="${state.editorOn}" data-loc-field="description">${state.editorOn ? escapeHtml(loc.description) : parseProse(loc.description)}</div>
+      ${state.editorOn ? `<div class="field-actions" data-for="loc-desc-${loc.id}"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
       <div class="gallery loc-gallery" id="gal-${loc.id}"></div>
     `;
     const nameEl = block.querySelector('[data-loc-field="name"]');
-    let prevLocName = loc.name;
-    nameEl.addEventListener('focus', ()=>{ prevLocName = nameEl.textContent.trim(); });
-    nameEl.addEventListener('blur', async e=>{
-      const val = e.target.textContent.trim();
-      if(val === prevLocName) return;
-      if(!val){
-        e.target.textContent = prevLocName;
-        toast('Название локации не может быть пустым — отменено.');
-        return;
-      }
+    wireEditableField(nameEl, block.querySelector(`[data-for="loc-name-${loc.id}"]`), async (val, restoreValue)=>{
       loc.name = val;
-      const restoreValue = prevLocName;
-      try{
-        await api(`/locations/${loc.id}`, { method:'PATCH', body:{ name: val } });
-        toast('Сохранено', async ()=>{
-          loc.name = restoreValue;
-          await api(`/locations/${loc.id}`, { method:'PATCH', body:{ name: restoreValue } });
-          if(state.currentId===item.id) renderDetail();
-        });
-      }
-      catch(err){ toast('Ошибка: '+err.message); }
-    });
+      await api(`/locations/${loc.id}`, { method:'PATCH', body:{ name: val } });
+      toast('Сохранено', async ()=>{
+        loc.name = restoreValue;
+        await api(`/locations/${loc.id}`, { method:'PATCH', body:{ name: restoreValue } });
+        if(state.currentId===item.id) renderDetail();
+      });
+    }, { required:true, requiredMsg:'Название локации не может быть пустым — отменено.' });
     const descEl = block.querySelector('[data-loc-field="description"]');
-    let prevLocDesc = loc.description;
-    descEl.addEventListener('focus', e=>{ e.target.classList.remove('empty'); prevLocDesc = descEl.textContent.trim(); });
-    descEl.addEventListener('blur', async e=>{
-      const val = e.target.textContent.trim();
-      if(val === prevLocDesc){ if(!val) e.target.classList.add('empty'); return; }
+    wireEditableField(descEl, descEl.nextElementSibling, async (val, restoreValue)=>{
       loc.description = val;
-      const restoreValue = prevLocDesc;
-      try{
-        await api(`/locations/${loc.id}`, { method:'PATCH', body:{ description: val } });
-        toast('Сохранено', async ()=>{
-          loc.description = restoreValue;
-          await api(`/locations/${loc.id}`, { method:'PATCH', body:{ description: restoreValue } });
-          if(state.currentId===item.id) renderDetail();
-        });
-      }
-      catch(err){ toast('Ошибка: '+err.message); }
-      if(!val) e.target.classList.add('empty');
+      await api(`/locations/${loc.id}`, { method:'PATCH', body:{ description: val } });
+      toast('Сохранено', async ()=>{
+        loc.description = restoreValue;
+        await api(`/locations/${loc.id}`, { method:'PATCH', body:{ description: restoreValue } });
+        if(state.currentId===item.id) renderDetail();
+      });
     });
+    bindProseToolbars(block);
     block.querySelector('.del').addEventListener('click', async ()=>{
-      if(!confirm('Удалить локацию "'+loc.name+'"?')) return;
+      const ok = await confirmDialog({ title:'Удалить локацию?', message:`«${loc.name}» будет удалена без возможности восстановить.`, confirmLabel:'Удалить', danger:true });
+      if(!ok) return;
       try{
         await api(`/locations/${loc.id}`, { method:'DELETE' });
         item.locations = item.locations.filter(l=>l.id!==loc.id);
@@ -507,9 +499,12 @@ function renderGallery(list, wrapId, ownerType, ownerId, onRemove, onAdd){
   }
 }
 
-function openGalleryAddMenu(ownerType, ownerId, onAdd){
-  const choice = confirm('Загрузить файл с компьютера? (OK — файл, Отмена — вставить ссылку)');
-  if(choice){
+async function openGalleryAddMenu(ownerType, ownerId, onAdd){
+  const useFile = await confirmDialog({
+    title:'Добавить изображение', message:'Загрузить файл с компьютера или вставить ссылку?',
+    confirmLabel:'Файл с компьютера', cancelLabel:'Вставить ссылку'
+  });
+  if(useFile){
     const input = document.createElement('input');
     input.type='file'; input.accept='image/*';
     input.onchange = async ()=>{
@@ -526,7 +521,7 @@ function openGalleryAddMenu(ownerType, ownerId, onAdd){
     };
     input.click();
   }else{
-    const url = prompt('Ссылка на изображение (URL):');
+    const url = await textPrompt({ title:'Ссылка на изображение', placeholder:'https://…', required:true });
     if(!url) return;
     api('/gallery', { method:'POST', body:{ ownerType, ownerId, url: url.trim() } })
       .then(result=> onAdd(result))
@@ -535,38 +530,201 @@ function openGalleryAddMenu(ownerType, ownerId, onAdd){
 }
 
 /* ====================== EDITABLE ISLAND FIELDS ====================== */
-function bindEditableFields(item){
-  detailView.querySelectorAll('[contenteditable="true"]').forEach(el=>{
-    let prevValue = el.textContent.trim();
-    el.addEventListener('focus', ()=>{ el.classList.remove('empty'); prevValue = el.textContent.trim(); });
-    el.addEventListener('blur', async ()=>{
-      const field = el.dataset.field;
-      const val = el.textContent.trim();
-      if(val === prevValue) return; // ничего не изменилось — не дёргаем сервер и не показываем undo
-      if(field==='name' && !val){
-        // пустое название острова ломает сортировку/группировку в вики и просто
-        // выглядит как баг — не даём сохранить, откатываем текст обратно
-        el.textContent = prevValue;
-        toast('Название острова не может быть пустым — отменено.');
-        return;
-      }
-      const patch = {};
-      if(field==='name') patch.name = val;
-      if(field==='description') patch.description = val;
-      if(field==='history') patch.history = val;
-      item[field] = val;
-      const restoreValue = prevValue;
-      try{
-        await api(`/allods/${item.id}`, { method:'PATCH', body: patch });
-        toast('Сохранено', async ()=>{
-          item[field] = restoreValue;
-          await api(`/allods/${item.id}`, { method:'PATCH', body: { [field]: restoreValue } });
-          if(state.currentId===item.id && !state.currentLocId) renderDetail();
-        });
-      }
-      catch(e){ toast('Ошибка сохранения: '+e.message); }
-      if(!val){ el.classList.add('empty'); }
+// Явные Save/Cancel вместо неявного автосохранения по blur: пока не нажата
+// кнопка, изменения остаются только в DOM и никуда не отправляются — это
+// защищает от случайной потери фокуса (клик мимо, переключение окна) и от
+// сохранения пустоты, если что-то в браузере обнулит поле на фокусе.
+// Общий "движок" переиспользуется и для полей острова, и для полей локации.
+function wireEditableField(el, actions, saveFn, opts={}){
+  let prevValue = el.textContent.trim();
+  const showActions = ()=>{ if(actions) actions.classList.add('show'); el.classList.add('field-editing'); };
+  const hideActions = ()=>{ if(actions) actions.classList.remove('show'); el.classList.remove('field-editing'); };
+
+  el.addEventListener('focus', ()=>{ el.classList.remove('empty'); prevValue = el.textContent.trim(); });
+  el.addEventListener('input', ()=>{
+    if(el.textContent.trim() === prevValue) hideActions(); else showActions();
+  });
+  el.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ e.preventDefault(); el.textContent = prevValue; hideActions(); el.blur(); }
+  });
+  if(!actions) return;
+
+  actions.querySelector('.field-cancel').addEventListener('click', ()=>{
+    el.textContent = prevValue;
+    if(!prevValue) el.classList.add('empty');
+    hideActions();
+  });
+  actions.querySelector('.field-save').addEventListener('click', async ()=>{
+    const val = el.textContent.trim();
+    if(opts.required && !val){
+      el.textContent = prevValue;
+      toast(opts.requiredMsg || 'Поле не может быть пустым — отменено.');
+      hideActions();
+      return;
+    }
+    if(val === prevValue){ hideActions(); return; }
+    const restoreValue = prevValue;
+    try{
+      await saveFn(val, restoreValue);
+      prevValue = val;
+      hideActions();
+      if(!val) el.classList.add('empty');
+    }
+    catch(e){ toast('Ошибка сохранения: '+e.message); }
+  });
+}
+
+/* ---------------- автокомплит @ в описании/истории ----------------
+   При вводе "@" и последующих букв — выпадающий список совпадений по
+   названиям островов (переиспользует .picker-item/.modal-list вёрстку
+   из picker.js, но без модального оверлея — плавающий блок под полем). */
+function bindAtAutocomplete(field){
+  if(field._atWired) return;
+  field._atWired = true;
+  const dropdown = document.createElement('div');
+  dropdown.className = 'modal-list at-autocomplete';
+  dropdown.style.display = 'none';
+  field.insertAdjacentElement('afterend', dropdown);
+  let activeIndex = -1;
+
+  function textBeforeCaret(){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    if(!field.contains(range.startContainer)) return null;
+    const pre = document.createRange();
+    pre.selectNodeContents(field);
+    pre.setEnd(range.startContainer, range.startOffset);
+    return pre.toString();
+  }
+
+  function currentAtQuery(){
+    const before = textBeforeCaret();
+    if(before===null) return null;
+    const m = before.match(/@([^\s@]*)$/); // от последнего "@" (без пробелов внутри) до каретки
+    return m ? m[1] : null;
+  }
+
+  function closeDropdown(){ dropdown.style.display='none'; activeIndex=-1; }
+
+  function renderDropdown(query){
+    const matches = state.data
+      .filter(d=> d.name.toLowerCase().includes(query.toLowerCase()))
+      .slice(0, 8);
+    if(!matches.length){ closeDropdown(); return; }
+    dropdown.innerHTML = matches.map((d,i)=>
+      `<div class="picker-item${i===0?' active':''}" data-name="${escapeHtml(d.name)}">${escapeHtml(d.name)}</div>`
+    ).join('');
+    activeIndex = 0;
+    dropdown.style.display = 'block';
+  }
+
+  function applySelection(name){
+    const before = textBeforeCaret();
+    if(before===null) return;
+    const atIdx = before.lastIndexOf('@');
+    if(atIdx===-1) return;
+    const insertText = name.includes(' ') ? `@"${name}" ` : `@${name} `;
+    // заменяем "@частично-набранное" на полное имя целиком через выделение диапазона
+    const sel = window.getSelection();
+    const range = sel.getRangeAt(0);
+    const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
+    let offset = 0, startNode=null, startOffset=0;
+    while(walker.nextNode()){
+      const len = walker.currentNode.textContent.length;
+      if(offset + len >= atIdx){ startNode = walker.currentNode; startOffset = atIdx - offset; break; }
+      offset += len;
+    }
+    if(!startNode) return;
+    const delRange = document.createRange();
+    delRange.setStart(startNode, startOffset);
+    delRange.setEnd(range.startContainer, range.startOffset);
+    delRange.deleteContents();
+    const node = document.createTextNode(insertText);
+    delRange.insertNode(node);
+    const newRange = document.createRange();
+    newRange.setStart(node, insertText.length);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    closeDropdown();
+    field.dispatchEvent(new Event('input', { bubbles:true }));
+  }
+
+  field.addEventListener('input', ()=>{
+    const q = currentAtQuery();
+    if(q===null) closeDropdown(); else renderDropdown(q);
+  });
+  field.addEventListener('blur', ()=> setTimeout(closeDropdown, 150)); // задержка — чтобы mousedown по варианту успел сработать раньше blur
+  field.addEventListener('keydown', e=>{
+    if(dropdown.style.display==='none') return;
+    const items = [...dropdown.children];
+    if(e.key==='ArrowDown'){ e.preventDefault(); activeIndex=(activeIndex+1)%items.length; items.forEach((it,i)=>it.classList.toggle('active',i===activeIndex)); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); activeIndex=(activeIndex-1+items.length)%items.length; items.forEach((it,i)=>it.classList.toggle('active',i===activeIndex)); }
+    else if(e.key==='Enter' || e.key==='Tab'){ if(items[activeIndex]){ e.preventDefault(); applySelection(items[activeIndex].dataset.name); } }
+    else if(e.key==='Escape'){ closeDropdown(); }
+  });
+  dropdown.addEventListener('mousedown', e=>{
+    const item = e.target.closest('.picker-item');
+    if(!item) return;
+    e.preventDefault();
+    applySelection(item.dataset.name);
+  });
+}
+
+function bindProseToolbars(root){
+  root.querySelectorAll('.prose-toolbar').forEach(bar=>{
+    if(bar._wired) return; // защита от повторного навешивания при перевызове с тем же root
+    bar._wired = true;
+    const forAttr = bar.dataset.for;
+    const field = root.querySelector(`[data-field="${forAttr}"]`) || root.querySelector(`[data-loc-field="description"]`);
+    if(!field) return;
+    bindAtAutocomplete(field);
+    bar.querySelectorAll('button[data-md]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        field.focus();
+        const marker = btn.dataset.md;
+        const sel = window.getSelection();
+        const hasSelectionInField = sel.rangeCount && field.contains(sel.getRangeAt(0).commonAncestorContainer);
+        const range = hasSelectionInField ? sel.getRangeAt(0) : document.createRange();
+        if(!hasSelectionInField){ range.selectNodeContents(field); range.collapse(false); }
+        const selectedText = range.toString();
+        range.deleteContents();
+        let insertText, caretOffsetFromEnd;
+        if(marker==='@'){
+          insertText = selectedText ? `@"${selectedText}"` : '@';
+          caretOffsetFromEnd = selectedText ? 0 : 0;
+        }else{
+          insertText = selectedText ? `${marker}${selectedText}${marker}` : `${marker}${marker}`;
+          caretOffsetFromEnd = selectedText ? 0 : marker.length;
+        }
+        const node = document.createTextNode(insertText);
+        range.insertNode(node);
+        const newRange = document.createRange();
+        newRange.setStart(node, insertText.length - caretOffsetFromEnd);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+        field.dispatchEvent(new Event('input', { bubbles:true })); // чтобы сработала логика показа панели Сохранить/Отмена
+      });
     });
+  });
+}
+
+function bindEditableFields(item){
+  detailView.querySelectorAll('[contenteditable="true"][data-field]').forEach(el=>{
+    const field = el.dataset.field;
+    const actions = el.nextElementSibling && el.nextElementSibling.classList.contains('field-actions')
+      ? el.nextElementSibling : null;
+    wireEditableField(el, actions, async (val, restoreValue)=>{
+      item[field] = val;
+      await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: val } });
+      toast('Сохранено', async ()=>{
+        item[field] = restoreValue;
+        await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: restoreValue } });
+        if(state.currentId===item.id && !state.currentLocId) renderDetail();
+      });
+    }, field==='name' ? { required:true, requiredMsg:'Название острова не может быть пустым — отменено.' } : {});
   });
 }
 
@@ -628,7 +786,8 @@ function renderLocationMiniMap(item){
       chip.textContent = loc.name;
       startPointerDrag(chip, {
         onStart: ()=> makeDragGhost(escapeHtml(loc.name)),
-        onEnd: async (x, y)=>{
+        onEnd: async (x, y, ev, moved)=>{
+          if(!moved) return; // просто клик по чипу без перетаскивания — не размещаем
           const rect = wrap.getBoundingClientRect();
           if(x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
           const mapX = Math.round(((x-rect.left)/rect.width)*1000)/10;
@@ -643,7 +802,12 @@ function renderLocationMiniMap(item){
     });
 
     document.getElementById('removeLocMapBtn').addEventListener('click', async ()=>{
-      if(!confirm('Убрать карту локаций? Расставленные метки при этом сохранятся и вернутся, если добавить карту заново.')) return;
+      const ok = await confirmDialog({
+        title:'Убрать карту локаций?',
+        message:'Расставленные метки при этом сохранятся и вернутся, если добавить карту заново.',
+        confirmLabel:'Убрать'
+      });
+      if(!ok) return;
       item.location_map_url = null;
       try{ await api(`/allods/${item.id}`, { method:'PATCH', body:{ location_map_url: null } }); }
       catch(e){ toast('Ошибка: '+e.message); }
@@ -652,9 +816,12 @@ function renderLocationMiniMap(item){
   }
 }
 
-function openLocMapAddMenu(item){
-  const choice = confirm('Загрузить файл карты с компьютера? (OK — файл, Отмена — вставить ссылку)');
-  if(choice){
+async function openLocMapAddMenu(item){
+  const useFile = await confirmDialog({
+    title:'Добавить карту локаций', message:'Загрузить файл с компьютера или вставить ссылку?',
+    confirmLabel:'Файл с компьютера', cancelLabel:'Вставить ссылку'
+  });
+  if(useFile){
     const input = document.createElement('input');
     input.type='file'; input.accept='image/*';
     input.onchange = async ()=>{
@@ -670,7 +837,7 @@ function openLocMapAddMenu(item){
     };
     input.click();
   }else{
-    const url = prompt('Ссылка на изображение карты (URL):');
+    const url = await textPrompt({ title:'Ссылка на карту локаций', placeholder:'https://…', required:true });
     if(!url) return;
     item.location_map_url = url.trim();
     api(`/allods/${item.id}`, { method:'PATCH', body:{ location_map_url: url.trim() } })
@@ -716,6 +883,8 @@ function makeLocMapMarkerDraggable(el, loc, wrap){
    перестраивается в renderDetail(), но сам узел не пересоздаётся), поэтому вешаем
    один делегированный обработчик один раз при загрузке скрипта, а не на каждый рендер. */
 detailView.addEventListener('click', (ev)=>{
+  const tagLink = ev.target.closest('[data-goto-allod]');
+  if(tagLink){ ev.preventDefault(); openDetail(tagLink.dataset.gotoAllod); return; }
   const el = ev.target.closest('[data-action]');
   if(!el) return;
   const action = el.dataset.action;

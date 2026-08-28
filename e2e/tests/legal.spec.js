@@ -12,6 +12,7 @@ test.describe('Копирайты и дисклеймер', ()=>{
     await expect(page.locator('#legalFooter')).toBeVisible();
 
     await page.click('#brand');
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#legalFooter')).toBeVisible();
   });

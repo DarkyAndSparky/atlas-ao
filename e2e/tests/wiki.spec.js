@@ -5,6 +5,7 @@ test.describe('Атлас островов (вики)', ()=>{
 
   test('показывает группы по фракциям и общее число островов', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#wikiView')).toHaveClass(/show/);
 
@@ -20,6 +21,7 @@ test.describe('Атлас островов (вики)', ()=>{
 
   test('клик по острову из вики открывает его страницу', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     const firstLink = page.locator('.wiki-island-link').first();
     const rawName = await firstLink.textContent();
@@ -31,6 +33,7 @@ test.describe('Атлас островов (вики)', ()=>{
 
   test('внутри каждой группы острова разбиты по размеру', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     const sizeTitles = await page.locator('.wiki-size-title').allTextContents();
     expect(sizeTitles.length).toBeGreaterThan(0);
@@ -55,6 +58,8 @@ test.describe('Атлас островов (вики)', ()=>{
       });
     }, islandName);
 
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
+
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#wikiView')).toHaveClass(/show/);
     await expect(page.locator('.wiki-island-list')).toContainText(islandName);
@@ -64,6 +69,7 @@ test.describe('Атлас островов (вики)', ()=>{
   test('включение режима редактора на странице вики не перекидывает на карту (регрессия)', async ({ page })=>{
     await gotoReady(page);
     await loginViaUI(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await expect(page.locator('#wikiView')).toHaveClass(/show/);
 

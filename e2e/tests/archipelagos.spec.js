@@ -6,13 +6,15 @@ test.describe('Архипелаги', ()=>{
   test('кнопка "+🏝" в Атласе островов создаёт архипелаг и привязывает остров', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
-
     const row = page.locator('.wiki-island-row').first();
     const islandName = (await row.locator('.wiki-island-link').textContent()).replace('●','').trim();
 
     page.once('dialog', d => d.accept('Новый архипелаг из Атласа'));
     await row.locator('[data-action="add-to-archipelago"]').click();
+
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
 
     await page.click('[data-view="archipelagos"]');
     await expect(page.locator('#archipelagosView')).toHaveClass(/show/);
@@ -42,6 +44,8 @@ test.describe('Архипелаги', ()=>{
     // панель выделения должна закрыться после успешной привязки
     await expect(page.locator('#mapSelectionPanel')).toHaveCount(0);
 
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
+
     await page.click('[data-view="archipelagos"]');
     const card = page.locator('.source-card', { hasText: 'Собранный через ctrl+клик архипелаг' });
     await expect(card).toContainText('2');
@@ -66,6 +70,7 @@ test.describe('Архипелаги', ()=>{
   test('пикер на странице острова: создать новый архипелаг и открепить обратно', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await page.locator('.wiki-island-link').first().click();
     await expect(page.locator('#detailView')).toHaveClass(/show/);
@@ -86,11 +91,14 @@ test.describe('Архипелаги', ()=>{
   test('удаление архипелага не удаляет остров — только открепляет', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     await page.locator('.wiki-island-link').first().click();
 
     page.once('dialog', d => d.accept('Архипелаг на удаление'));
     await page.locator('#archipelagoSelect').selectOption('__new__');
+
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
 
     await page.click('[data-view="archipelagos"]');
     const card = page.locator('.source-card', { hasText: 'Архипелаг на удаление' });

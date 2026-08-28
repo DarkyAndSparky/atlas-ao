@@ -16,6 +16,7 @@ test.describe('Источники', ()=>{
 
   test('глобальная страница показывает 3 засеянных источника', async ({ page })=>{
     await gotoReady(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="sources"]');
     await expect(page.locator('#sourcesView')).toHaveClass(/show/);
     await expect(page.locator('.source-card')).toHaveCount(3);
@@ -25,8 +26,8 @@ test.describe('Источники', ()=>{
   test('добавление источника с глобальной страницы и последующее редактирование', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="sources"]');
-
     queueDialogs(page, ['E2E тестовый источник', 'https://example.com/e2e', 'заметка про источник']);
     await page.click('#addGlobalSourceBtn');
     await expect(page.locator('.source-card-title', { hasText: 'E2E тестовый источник' })).toBeVisible();
@@ -42,6 +43,7 @@ test.describe('Источники', ()=>{
     await loginAndEnableEditor(page);
 
     // открываем первый попавшийся остров
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     const firstLink = page.locator('.wiki-island-link').first();
     const rawName = await firstLink.textContent();
@@ -65,6 +67,7 @@ test.describe('Источники', ()=>{
     await expect(page.locator('#sourcesSection .entity-source-item .note')).toContainText('взято отсюда');
 
     // на глобальной странице у этого источника должна появиться ссылка-чип на остров
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="sources"]');
     const linkedCard = page.locator('.source-card', { hasText: 'Введение в историю вселенной Аллодов' });
     await expect(linkedCard.locator('.source-ref-chip', { hasText: allodName })).toBeVisible();
@@ -73,6 +76,7 @@ test.describe('Источники', ()=>{
   test('отвязка источника от аллода убирает его из блока', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="wiki"]');
     const firstLink = page.locator('.wiki-island-link').first();
     await firstLink.click();
