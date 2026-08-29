@@ -226,7 +226,10 @@ async function renderConfigPanel(){
         человека задать новый при следующем входе (например, если пароль мог стать известен
         кому-то ещё) — доступ при этом не блокируется немедленно, только при следующем входе.
         Нельзя удалить и нельзя понизить в роли последнего оставшегося администратора — если
-        понадобится сбросить всех, это делается на сервере командой <code>npm run reset-password</code>.</p>
+        понадобится сбросить всех, это делается на сервере командой <code>npm run reset-password</code>.
+        Кнопкой «Проекты»/«Все проекты» у редактора можно ограничить его правки конкретными
+        проектами (например, если человек ведёт только один раздел) — на администраторов
+        ограничение не действует.</p>
         <div class="users-list" id="usersList">
           ${users.map(u=>`
             <div class="user-row">
@@ -236,6 +239,7 @@ async function renderConfigPanel(){
                 <option value="admin" ${u.role==='admin'?'selected':''}>администратор</option>
               </select>
               <span class="user-date">с ${new Date(u.createdAt).toLocaleDateString('ru-RU')}</span>
+              ${u.role==='editor' ? `<button class="btn user-scope-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}" title="Ограничить редактирование конкретными проектами">${u.allowedProjects ? `Проекты: ${u.allowedProjects.length}` : 'Все проекты'}</button>` : ''}
               ${u.mustChangePassword ? '<span class="user-reset-pending" title="При следующем входе потребуется сменить пароль">ожидает смены пароля</span>' : ''}
               <button class="btn user-reset-pass" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}" title="Заставить сменить пароль при следующем входе">Сбросить пароль</button>
               ${users.length>1 ? `<button class="btn user-del" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}">Удалить</button>` : ''}
@@ -408,6 +412,21 @@ async function renderConfigPanel(){
       toast('Пользователь добавлен: '+username);
       renderConfigPanel();
     }catch(e){ toast('Ошибка: '+e.message); }
+  });
+
+  document.querySelectorAll('.user-scope-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.userId;
+      const name = btn.dataset.userName;
+      const u = users.find(x=> String(x.id)===String(id));
+      const result = await pickProjectScope(u ? u.allowedProjects : null);
+      if(result===undefined) return; // отмена
+      try{
+        await api('/auth/users/'+id, { method:'PATCH', body:{ allowedProjects: result } });
+        toast('Доступ по проектам обновлён: '+name);
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
+    });
   });
 
   document.querySelectorAll('.user-role-select').forEach(sel=>{
@@ -671,3 +690,69 @@ document.getElementById('configView').addEventListener('click', (ev)=>{
   const el = ev.target.closest('[data-action="show-map"]');
   if(el) showMap();
 });
+
+/* ---------------- pickProjectScope ---------------- */
+// Небольшая выделенная модалка (не генерализовал до picker.js — список
+// проектов фиксирован и короткий, чекбоксы тут проще и понятнее, чем
+// подгонять под это pickFromList). Возвращает: undefined — отмена (ничего
+// не менять), null — "без ограничений", string[] — конкретный список
+// (минимум 1 элемент — 0 отмеченных чекбоксов при выбранном режиме
+// "ограничить" не даёт сохранить, иначе это случайно означало бы то же
+// самое, что и "без ограничений", см. серверную семантику allowed_projects).
+let scopeOverlay, scopeResolve;
+function ensureScopeDom(){
+  if(scopeOverlay) return;
+  scopeOverlay = document.createElement('div');
+  scopeOverlay.className = 'modal-overlay';
+  scopeOverlay.innerHTML = `
+    <div class="modal-box" style="width:380px;">
+      <div class="modal-title">Доступ по проектам</div>
+      <label style="display:flex;align-items:center;gap:8px;font-family:var(--ui);font-size:13px;color:var(--parchment);margin-top:10px;cursor:pointer;">
+        <input type="radio" name="scopeMode" value="all"> Без ограничений (все проекты)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-family:var(--ui);font-size:13px;color:var(--parchment);margin-top:8px;cursor:pointer;">
+        <input type="radio" name="scopeMode" value="restricted"> Только выбранные:
+      </label>
+      <div class="scope-project-list" style="margin:6px 0 0 24px;display:flex;flex-direction:column;gap:6px;"></div>
+      <div class="modal-actions">
+        <button class="field-cancel">Отмена</button>
+        <button class="field-save">Сохранить</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(scopeOverlay);
+  const listEl = scopeOverlay.querySelector('.scope-project-list');
+  listEl.innerHTML = PROJECTS.map(p=> `
+    <label style="display:flex;align-items:center;gap:8px;font-family:var(--ui);font-size:12.5px;color:var(--parchment-dim);cursor:pointer;">
+      <input type="checkbox" class="scope-project-cb" value="${escapeHtml(p.id)}"> ${escapeHtml(p.label)}
+    </label>
+  `).join('');
+  const radios = [...scopeOverlay.querySelectorAll('input[name="scopeMode"]')];
+  const checkboxes = [...scopeOverlay.querySelectorAll('.scope-project-cb')];
+  const syncEnabled = ()=>{
+    const restricted = scopeOverlay.querySelector('input[name="scopeMode"]:checked').value==='restricted';
+    checkboxes.forEach(cb=> cb.disabled = !restricted);
+  };
+  radios.forEach(r=> r.addEventListener('change', syncEnabled));
+  const close = (result)=>{ scopeOverlay.classList.remove('show'); if(scopeResolve){ const r=scopeResolve; scopeResolve=null; r(result); } };
+  scopeOverlay.querySelector('.field-cancel').addEventListener('click', ()=> close(undefined));
+  scopeOverlay.querySelector('.field-save').addEventListener('click', ()=>{
+    const restricted = scopeOverlay.querySelector('input[name="scopeMode"]:checked').value==='restricted';
+    if(!restricted){ close(null); return; }
+    const picked = checkboxes.filter(cb=>cb.checked).map(cb=>cb.value);
+    if(!picked.length){ toast('Отметьте хотя бы один проект, или выберите «Без ограничений».'); return; }
+    close(picked);
+  });
+  scopeOverlay.addEventListener('mousedown', e=>{ if(e.target===scopeOverlay) close(undefined); });
+  scopeOverlay.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.preventDefault(); close(undefined); } });
+  scopeOverlay._radios = radios; scopeOverlay._checkboxes = checkboxes; scopeOverlay._syncEnabled = syncEnabled;
+}
+function pickProjectScope(currentAllowed){
+  ensureScopeDom();
+  const { _radios, _checkboxes, _syncEnabled } = scopeOverlay;
+  _radios.forEach(r=> r.checked = (r.value==='restricted') === !!currentAllowed);
+  _checkboxes.forEach(cb=> cb.checked = !!currentAllowed && currentAllowed.includes(cb.value));
+  _syncEnabled();
+  scopeOverlay.classList.add('show');
+  return new Promise(resolve=>{ scopeResolve = resolve; });
+}

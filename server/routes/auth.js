@@ -59,7 +59,19 @@ function countUsers(){
 }
 
 function publicUser(u){
-  return { id: u.id, username: u.username, role: u.role, mustChangePassword: !!u.must_change_password, createdAt: u.created_at };
+  return { id: u.id, username: u.username, role: u.role, mustChangePassword: !!u.must_change_password, createdAt: u.created_at, allowedProjects: parseAllowedProjects(u.allowed_projects) };
+}
+
+// allowed_projects в БД хранится как JSON-строка массива или NULL. Раньше
+// это поле только объявили в схеме и нигде не читали/не писали — сессия
+// логина его не подхватывала, поэтому hasProjectAccess() всегда молча
+// пропускала всех (allowedProjects всегда undefined == null == "без
+// ограничений"), независимо от того, что реально лежало в БД. Починено:
+// логин теперь кладёт распарсенное значение в сессию (см. ниже).
+function parseAllowedProjects(raw){
+  if(!raw) return null;
+  try{ const arr = JSON.parse(raw); return Array.isArray(arr) && arr.length ? arr : null; }
+  catch(e){ return null; }
 }
 
 // SQLite's COLLATE NOCASE only case-folds ASCII (A-Z/a-z) — 'Империя' и
@@ -78,13 +90,14 @@ router.get('/status', (req, res)=>{
     loggedIn: !!(req.session && req.session.loggedIn),
     username: (req.session && req.session.username) || null,
     role: (req.session && req.session.role) || null,
+    allowedProjects: (req.session && req.session.allowedProjects) || null,
     mustChangePassword: !!(req.session && req.session.mustChangePassword),
   });
 });
 
 // Список редакторов — для панели «Настройки → Пользователи» (только админ).
 router.get('/users', requireAdmin, (req, res)=>{
-  const users = db.prepare('SELECT id, username, role, must_change_password, created_at FROM users ORDER BY created_at ASC').all();
+  const users = db.prepare('SELECT id, username, role, must_change_password, created_at, allowed_projects FROM users ORDER BY created_at ASC').all();
   res.json(users.map(publicUser));
 });
 
@@ -181,10 +194,11 @@ router.post('/login', async (req, res, next)=>{
       req.session.userId = user.id;
       req.session.username = user.username;
       req.session.role = user.role;
+      req.session.allowedProjects = parseAllowedProjects(user.allowed_projects);
       req.session.mustChangePassword = !!user.must_change_password;
       req.session.save(err2=>{
         if(err2) return next(err2);
-        res.json({ ok: true, user: { id: user.id, username: user.username, role: user.role, mustChangePassword: !!user.must_change_password } });
+        res.json({ ok: true, user: publicUser(user) });
       });
     });
   }catch(err){ next(err); }
@@ -250,11 +264,25 @@ router.patch('/users/:id', requireAdmin, (req, res)=>{
     if(req.session.userId === id) req.session.role = role;
   }
 
+  if('allowedProjects' in req.body){
+    const parsed = validateAllowedProjects(req.body.allowedProjects);
+    if(parsed.error) return res.status(400).json({ error: parsed.error });
+    // Последнего администратора трогать не о чем — requireProjectAccess у
+    // роли admin всегда возвращает true, so ограничивать проект админу
+    // бессмысленно (и не проверяем это как отдельную защиту — не критично,
+    // просто сохранённое значение будет молча ни на что не влиять).
+    db.prepare('UPDATE users SET allowed_projects=? WHERE id=?')
+      .run(parsed.value ? JSON.stringify(parsed.value) : null, id);
+    // тот же паттерн, что и для role выше — если админ меняет ограничения
+    // самому себе, применяем сразу к текущей сессии
+    if(req.session.userId === id) req.session.allowedProjects = parsed.value;
+  }
+
   if(req.body.forcePasswordReset === true){
     db.prepare('UPDATE users SET must_change_password=1 WHERE id=?').run(id);
   }
 
-  res.json(publicUser(db.prepare('SELECT id, username, role, must_change_password, created_at FROM users WHERE id=?').get(id)));
+  res.json(publicUser(db.prepare('SELECT id, username, role, must_change_password, created_at, allowed_projects FROM users WHERE id=?').get(id)));
 });
 
 // Удаление чужого (или своего) аккаунта редактора — только админ. Нельзя
@@ -283,4 +311,4 @@ router.delete('/users/:id', requireAdmin, (req, res)=>{
   }
 });
 
-module.exports = { router, requireAuth, requireAdmin };
+module.exports = { router, requireAuth, requireAdmin, requireProjectAccess, hasProjectAccess };

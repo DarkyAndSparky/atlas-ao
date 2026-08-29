@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
-const { requireAuth, requireAdmin } = require('./auth');
+const { requireAuth, requireAdmin, requireProjectAccess, hasProjectAccess } = require('./auth');
 const { upload, verifyUploadedImage, sanitizeUploadedSvg, compressUploadedImage, deleteUploadedFile } = require('../upload');
 
 const router = express.Router();
@@ -31,6 +31,8 @@ router.get('/allods/:id', (req, res)=>{
 router.post('/allods', requireAuth, (req, res)=>{
   const name = (req.body.name||'').trim();
   if(!name) return res.status(400).json({ error: 'Название обязательно' });
+  const project = req.body.project || 'Аллоды Онлайн';
+  if(!requireProjectAccess(req, res, project)) return;
   const id = 'allod_' + crypto.randomBytes(6).toString('hex');
   const { uniqueSlug } = require('../slug');
   const existingSlugs = new Set(
@@ -39,13 +41,14 @@ router.post('/allods', requireAuth, (req, res)=>{
   const slug = uniqueSlug(name, existingSlugs);
   db.prepare(`INSERT INTO allods (id, name, slug, project, description, history)
     VALUES (@id, @name, @slug, @project, '', '')`)
-    .run({ id, name, slug, project: req.body.project || 'Аллоды Онлайн' });
+    .run({ id, name, slug, project });
   res.json(fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(id)));
 });
 
 router.delete('/allods/:id', requireAuth, (req, res)=>{
   const allod = db.prepare('SELECT * FROM allods WHERE id=?').get(req.params.id);
   if(!allod) return res.status(404).json({ error: 'Не найдено' });
+  if(!requireProjectAccess(req, res, allod.project)) return;
   const locIds = db.prepare('SELECT id FROM locations WHERE allod_id=?').all(allod.id).map(l=>l.id);
   const gals = db.prepare("SELECT url FROM gallery WHERE (owner_type='allod' AND owner_id=?) OR (owner_type='location' AND owner_id IN (" + (locIds.map(()=>'?').join(',') || 'NULL') + "))")
     .all(allod.id, ...locIds);
@@ -76,6 +79,17 @@ const ALLOD_FIELDS = ['name','climate','size','holder','faction','hasMap','type'
 router.patch('/allods/:id', requireAuth, (req, res)=>{
   const row = db.prepare('SELECT * FROM allods WHERE id=?').get(req.params.id);
   if(!row) return res.status(404).json({ error: 'Не найдено' });
+  if(!requireProjectAccess(req, res, row.project)) return;
+  if('project' in req.body && req.body.project !== row.project && !requireProjectAccess(req, res, req.body.project)) return;
+  // optimistic concurrency: клиент присылает rev, который видел при загрузке
+  // записи. Если он не совпадает с тем, что сейчас в БД — кто-то другой
+  // успел сохранить свою правку первым. Не молча перезаписываем — отдаём
+  // 409 с актуальной версией, фронтенд сам решает, что показать пользователю.
+  // Поле необязательное — старые/прочие вызовы без expectedRev (смена тега
+  // одним кликом и т.п.) продолжают работать как раньше, без проверки.
+  if('expectedRev' in req.body && req.body.expectedRev !== (row.rev || 0)){
+    return res.status(409).json({ error: 'conflict', current: fullAllod(row) });
+  }
   if('name' in req.body && !(req.body.name||'').trim()){
     return res.status(400).json({ error: 'Название острова не может быть пустым.' });
   }
@@ -112,7 +126,7 @@ router.patch('/allods/:id', requireAuth, (req, res)=>{
       deleteUploadedFile(row[f]);
     }
   });
-  const setSql = Object.keys(updates).map(k=>`${k}=@${k}`).join(', ');
+  const setSql = Object.keys(updates).map(k=>`${k}=@${k}`).join(', ') + ', rev = COALESCE(rev,0) + 1';
   // better-sqlite3 бросает ошибку на лишние именованные параметры в .run(),
   // поэтому в объект биндинга кладём ровно те ключи, что есть в setSql, плюс id.
   db.prepare(`UPDATE allods SET ${setSql} WHERE id=@id`).run({ ...updates, id: req.params.id });
@@ -147,16 +161,69 @@ router.get('/allod-snapshots/:snapshotId', requireAuth, (req, res)=>{
 router.get('/recent-changes', requireAuth, (req, res)=>{
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
   const before = req.query.before ? Number(req.query.before) : null;
-  const rows = before && Number.isFinite(before)
-    ? db.prepare('SELECT id, allod_id, allod_name, changed_by, created_at FROM allod_snapshots WHERE created_at < ? ORDER BY created_at DESC LIMIT ?').all(before, limit)
-    : db.prepare('SELECT id, allod_id, allod_name, changed_by, created_at FROM allod_snapshots ORDER BY created_at DESC LIMIT ?').all(limit);
+  const conds = [];
+  const params = [];
+  if(before && Number.isFinite(before)){ conds.push('created_at < ?'); params.push(before); }
+  if(req.query.allodId){ conds.push('allod_id = ?'); params.push(req.query.allodId); }
+  if(req.query.author){ conds.push('changed_by = ?'); params.push(req.query.author); }
+  const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+  const rows = db.prepare(
+    `SELECT id, allod_id, allod_name, changed_by, created_at FROM allod_snapshots ${where} ORDER BY created_at DESC LIMIT ?`
+  ).all(...params, limit);
   res.json(rows);
+});
+
+// Список авторов, встречающихся в журнале — для выпадающего фильтра на
+// фронтенде. NULL (правки до включения авторизации/системные) не отдаём,
+// фильтровать по "неизвестно кто" всё равно нечем.
+router.get('/recent-changes/authors', requireAuth, (req, res)=>{
+  const rows = db.prepare(
+    "SELECT DISTINCT changed_by FROM allod_snapshots WHERE changed_by IS NOT NULL ORDER BY changed_by"
+  ).all();
+  res.json(rows.map(r=>r.changed_by));
+});
+
+// Поля, которые реально осмысленно показывать в diff — служебные/шумные
+// (id, rev, mapX/mapY — двигаются при любом перетаскивании метки) исключены.
+const DIFF_FIELDS = ['name','description','history','climate','size','holder','faction','type','category','plot','expansion','archipelago','project','icon_url','location_map_url','hasMap','year_appeared','year_disappeared','slug'];
+const DIFF_FIELD_LABELS = { name:'Название', description:'Описание', history:'История', climate:'Климат', size:'Размер', holder:'Владелец', faction:'Фракция', type:'Тип', category:'Категория', plot:'Сюжет', expansion:'Дополнение', archipelago:'Архипелаг (текст)', project:'Проект', icon_url:'Иконка', location_map_url:'Карта локаций', hasMap:'Есть карта', year_appeared:'Год появления', year_disappeared:'Год исчезновения', slug:'Slug' };
+
+// Diff одного снимка: сравниваем "было" (сам снимок — состояние ДО правки,
+// см. комментарий у INSERT в PATCH /allods/:id) с "стало" — следующим по
+// времени снимком этого же острова, а если снимок последний — с текущим
+// живым состоянием записи в allods (остров мог с тех пор уже не измениться
+// снова, тогда "стало" = сейчас).
+router.get('/allod-snapshots/:snapshotId/diff', requireAuth, (req, res)=>{
+  const snap = db.prepare('SELECT * FROM allod_snapshots WHERE id=?').get(req.params.snapshotId);
+  if(!snap) return res.status(404).json({ error: 'Снимок не найден' });
+  let before;
+  try{ before = JSON.parse(snap.snapshot_json); }
+  catch(e){ return res.status(500).json({ error: 'Снимок повреждён' }); }
+
+  const nextSnap = db.prepare(
+    'SELECT snapshot_json FROM allod_snapshots WHERE allod_id=? AND created_at > ? ORDER BY created_at ASC LIMIT 1'
+  ).get(snap.allod_id, snap.created_at);
+  let after;
+  if(nextSnap){
+    try{ after = JSON.parse(nextSnap.snapshot_json); }catch(e){ after = null; }
+  }else{
+    after = db.prepare('SELECT * FROM allods WHERE id=?').get(snap.allod_id) || null; // null — остров с тех пор удалён
+  }
+
+  if(!after){
+    return res.json({ deleted: true, changes: [] }); // остров удалён позже этого снимка — нечего с чем сравнивать
+  }
+  const changes = DIFF_FIELDS
+    .filter(f=> (before[f] ?? '') !== (after[f] ?? ''))
+    .map(f=> ({ field: f, label: DIFF_FIELD_LABELS[f] || f, from: before[f] ?? null, to: after[f] ?? null }));
+  res.json({ deleted: false, changes });
 });
 
 /* ---------------- locations ---------------- */
 router.post('/allods/:id/locations', requireAuth, (req, res)=>{
-  const allod = db.prepare('SELECT id FROM allods WHERE id=?').get(req.params.id);
+  const allod = db.prepare('SELECT id, project FROM allods WHERE id=?').get(req.params.id);
   if(!allod) return res.status(404).json({ error: 'Аллод не найден' });
+  if(!requireProjectAccess(req, res, allod.project)) return;
   const name = (req.body.name||'').trim();
   if(!name) return res.status(400).json({ error: 'Название обязательно' });
   const id = 'loc_' + crypto.randomBytes(6).toString('hex');
@@ -169,6 +236,11 @@ router.post('/allods/:id/locations', requireAuth, (req, res)=>{
 router.patch('/locations/:id', requireAuth, (req, res)=>{
   const loc = db.prepare('SELECT * FROM locations WHERE id=?').get(req.params.id);
   if(!loc) return res.status(404).json({ error: 'Локация не найдена' });
+  const parentAllod = db.prepare('SELECT project FROM allods WHERE id=?').get(loc.allod_id);
+  if(parentAllod && !requireProjectAccess(req, res, parentAllod.project)) return;
+  if('expectedRev' in req.body && req.body.expectedRev !== (loc.rev || 0)){
+    return res.status(409).json({ error: 'conflict', current: fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(loc.allod_id)) });
+  }
   if('name' in req.body && !(req.body.name||'').trim()){
     return res.status(400).json({ error: 'Название локации не может быть пустым.' });
   }
@@ -177,15 +249,16 @@ router.patch('/locations/:id', requireAuth, (req, res)=>{
   fields.forEach(f=>{ if(f in req.body) updates[f]=req.body[f]; });
   if('name' in updates) updates.name = updates.name.trim();
   if(Object.keys(updates).length){
-    const setSql = Object.keys(updates).map(k=>`${k}=@${k}`).join(', ');
+    const setSql = Object.keys(updates).map(k=>`${k}=@${k}`).join(', ') + ', rev = COALESCE(rev,0) + 1';
     db.prepare(`UPDATE locations SET ${setSql} WHERE id=@id`).run({ ...updates, id: loc.id });
   }
   res.json(fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(loc.allod_id)));
 });
 
 router.post('/allods/:id/locations/reorder', requireAuth, (req, res)=>{
-  const allod = db.prepare('SELECT id FROM allods WHERE id=?').get(req.params.id);
+  const allod = db.prepare('SELECT id, project FROM allods WHERE id=?').get(req.params.id);
   if(!allod) return res.status(404).json({ error: 'Аллод не найден' });
+  if(!requireProjectAccess(req, res, allod.project)) return;
   const order = req.body.order; // массив id локаций в нужном порядке
   if(!Array.isArray(order)) return res.status(400).json({ error: 'Ожидался массив id локаций' });
   const upd = db.prepare('UPDATE locations SET sort_order=? WHERE id=? AND allod_id=?');
@@ -199,6 +272,8 @@ router.post('/allods/:id/locations/reorder', requireAuth, (req, res)=>{
 router.delete('/locations/:id', requireAuth, (req, res)=>{
   const loc = db.prepare('SELECT * FROM locations WHERE id=?').get(req.params.id);
   if(!loc) return res.status(404).json({ error: 'Не найдено' });
+  const parentAllod = db.prepare('SELECT project FROM allods WHERE id=?').get(loc.allod_id);
+  if(parentAllod && !requireProjectAccess(req, res, parentAllod.project)) return;
   const gals = db.prepare("SELECT url FROM gallery WHERE owner_type='location' AND owner_id=?").all(loc.id);
   gals.forEach(g=> deleteUploadedFile(g.url));
   db.prepare("DELETE FROM gallery WHERE owner_type='location' AND owner_id=?").run(loc.id);
@@ -207,18 +282,39 @@ router.delete('/locations/:id', requireAuth, (req, res)=>{
   res.json(fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(loc.allod_id)));
 });
 
+// Владелец записи в gallery — либо остров напрямую, либо локация (тогда
+// проект берём у родительского острова). Нужно единое место, потому что
+// эта развилка повторяется в 4 местах ниже (создание по ссылке, upload,
+// caption, удаление).
+function projectOfGalleryOwner(ownerType, ownerId){
+  if(ownerType==='allod') return (db.prepare('SELECT project FROM allods WHERE id=?').get(ownerId)||{}).project;
+  if(ownerType==='location'){
+    const loc = db.prepare('SELECT allod_id FROM locations WHERE id=?').get(ownerId);
+    if(!loc) return undefined;
+    return (db.prepare('SELECT project FROM allods WHERE id=?').get(loc.allod_id)||{}).project;
+  }
+  return undefined;
+}
+
 /* ---------------- gallery: by URL ---------------- */
 router.post('/gallery', requireAuth, (req, res)=>{
   const { ownerType, ownerId, url } = req.body;
   if(!['allod','location'].includes(ownerType) || !ownerId || !url) return res.status(400).json({ error: 'Некорректные данные' });
+  const project = projectOfGalleryOwner(ownerType, ownerId);
+  if(project===undefined) return res.status(404).json({ error: 'Владелец не найден' });
+  if(!requireProjectAccess(req, res, project)) return;
   const maxSort = db.prepare('SELECT COALESCE(MAX(sort_order),-1) m FROM gallery WHERE owner_type=? AND owner_id=?').get(ownerType, ownerId).m;
   const info = db.prepare('INSERT INTO gallery (owner_type, owner_id, url, sort_order) VALUES (?,?,?,?)').run(ownerType, ownerId, url, maxSort+1);
   res.json({ id: info.lastInsertRowid, url, caption: '' });
 });
 
 router.delete('/gallery/:id', requireAuth, (req, res)=>{
-  const row = db.prepare('SELECT url FROM gallery WHERE id=?').get(req.params.id);
-  if(row) deleteUploadedFile(row.url); // чистим физический файл, если он был загружен, а не ссылка
+  const row = db.prepare('SELECT url, owner_type, owner_id FROM gallery WHERE id=?').get(req.params.id);
+  if(row){
+    const project = projectOfGalleryOwner(row.owner_type, row.owner_id);
+    if(project!==undefined && !requireProjectAccess(req, res, project)) return;
+    deleteUploadedFile(row.url); // чистим физический файл, если он был загружен, а не ссылка
+  }
   db.prepare('DELETE FROM gallery WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
@@ -226,6 +322,8 @@ router.delete('/gallery/:id', requireAuth, (req, res)=>{
 router.patch('/gallery/:id', requireAuth, (req, res)=>{
   const row = db.prepare('SELECT * FROM gallery WHERE id=?').get(req.params.id);
   if(!row) return res.status(404).json({ error: 'Не найдено' });
+  const project = projectOfGalleryOwner(row.owner_type, row.owner_id);
+  if(project!==undefined && !requireProjectAccess(req, res, project)) return;
   const caption = (req.body.caption ?? '').toString();
   db.prepare('UPDATE gallery SET caption=? WHERE id=?').run(caption, req.params.id);
   res.json({ id: row.id, url: row.url, caption });
@@ -236,6 +334,10 @@ router.post('/allods/:id/icon', requireAuth, upload.single('image'), verifyUploa
   if(!row){
     if(req.file) deleteUploadedFile('/uploads/' + req.file.filename);
     return res.status(404).json({ error: 'Не найдено' });
+  }
+  if(!hasProjectAccess(req, row.project)){
+    if(req.file) deleteUploadedFile('/uploads/' + req.file.filename); // файл уже принят multer'ом до этой проверки — подчищаем, иначе останется мусором
+    return res.status(403).json({ error: `Нет прав на редактирование проекта «${row.project}».` });
   }
   if(!req.file) return res.status(400).json({ error: 'Файл не получен' });
   // если у острова уже была своя загруженная (не внешняя ссылкой) иконка —
@@ -252,6 +354,10 @@ router.post('/allods/:id/location-map', requireAuth, upload.single('image'), ver
     if(req.file) deleteUploadedFile('/uploads/' + req.file.filename);
     return res.status(404).json({ error: 'Не найдено' });
   }
+  if(!hasProjectAccess(req, row.project)){
+    if(req.file) deleteUploadedFile('/uploads/' + req.file.filename);
+    return res.status(403).json({ error: `Нет прав на редактирование проекта «${row.project}».` });
+  }
   if(!req.file) return res.status(400).json({ error: 'Файл не получен' });
   if(row.location_map_url && row.location_map_url.startsWith('/uploads/')) deleteUploadedFile(row.location_map_url);
   const url = '/uploads/' + req.file.filename;
@@ -267,6 +373,15 @@ router.post('/gallery/upload', requireAuth, upload.single('image'), verifyUpload
     // диске — если владелец всё равно некорректный, не оставляем файл сиротой
     if(req.file) deleteUploadedFile('/uploads/' + req.file.filename);
     return res.status(400).json({ error: 'Некорректные данные' });
+  }
+  const project = projectOfGalleryOwner(ownerType, ownerId);
+  if(project===undefined){
+    deleteUploadedFile('/uploads/' + req.file.filename);
+    return res.status(404).json({ error: 'Владелец не найден' });
+  }
+  if(!hasProjectAccess(req, project)){
+    deleteUploadedFile('/uploads/' + req.file.filename);
+    return res.status(403).json({ error: `Нет прав на редактирование проекта «${project}».` });
   }
   const url = '/uploads/' + req.file.filename;
   const maxSort = db.prepare('SELECT COALESCE(MAX(sort_order),-1) m FROM gallery WHERE owner_type=? AND owner_id=?').get(ownerType, ownerId).m;

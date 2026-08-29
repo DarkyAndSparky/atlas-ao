@@ -361,6 +361,23 @@ if(!locationCols.includes('mapX')){
   db.exec("ALTER TABLE locations ADD COLUMN mapY REAL");
 }
 
+// rev — счётчик версий для optimistic concurrency control (обнаружение
+// конфликта одновременного редактирования). Проще и надёжнее временной
+// метки: целочисленное равенство не зависит от разрешения системных часов
+// и не ломается при синхронизации времени сервера. Инкрементируется на
+// каждом успешном PATCH (см. routes/allods.js); фронтенд передаёт
+// expectedRev, полученный при последней загрузке записи — если он не
+// совпадает с текущим значением в БД, значит запись поменяли, пока эта
+// вкладка её редактировала.
+if(!allodCols.includes('rev')){
+  console.log('Миграция: добавляю колонку rev в таблицу allods...');
+  db.exec("ALTER TABLE allods ADD COLUMN rev INTEGER DEFAULT 0");
+}
+if(!locationCols.includes('rev')){
+  console.log('Миграция: добавляю колонку rev в таблицу locations...');
+  db.exec("ALTER TABLE locations ADD COLUMN rev INTEGER DEFAULT 0");
+}
+
 // backfill slug для записей без него (созданы до этой фичи через UI, или
 // импортированы из старого экспорта без поля slug) — колонка в схеме
 // существует с самого начала для новых баз, но у по-настоящему старых баз

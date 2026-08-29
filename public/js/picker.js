@@ -219,3 +219,51 @@ function textPrompt(options){
   setTimeout(()=>{ el.focus(); el.select(); }, 0);
   return new Promise(resolve=>{ tpResolve = resolve; });
 }
+
+/* ---------------- resolveConflict ---------------- */
+// Замена молчаливой перезаписи при одновременном редактировании (см.
+// expectedRev в PATCH /allods, /locations). Показывает и мою, и чужую
+// версию поля рядом — пользователь решает сам, а не теряет правку молча.
+let conflictOverlay, conflictResolve = null;
+function ensureConflictDom(){
+  if(conflictOverlay) return;
+  conflictOverlay = document.createElement('div');
+  conflictOverlay.className = 'modal-overlay';
+  conflictOverlay.innerHTML = `
+    <div class="modal-box" style="width:460px;">
+      <div class="modal-title">Кто-то другой уже сохранил это поле</div>
+      <div class="modal-message">Пока вы редактировали «<span class="cf-field"></span>», кто-то ещё изменил и сохранил остров. Ваша правка ещё не потеряна — выберите, что делать.</div>
+      <div style="margin-top:12px;">
+        <div style="font-family:var(--ui);font-size:11px;color:var(--parchment-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Их версия (уже сохранена)</div>
+        <div class="cf-theirs" style="background:var(--void-0);border:1px solid var(--line);border-radius:3px;padding:10px 12px;font-family:var(--display);font-size:14px;color:var(--parchment-dim);max-height:120px;overflow-y:auto;white-space:pre-wrap;"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <div style="font-family:var(--ui);font-size:11px;color:var(--parchment-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Ваша версия (ещё не сохранена)</div>
+        <div class="cf-mine" style="background:var(--void-0);border:1px solid var(--gold);border-radius:3px;padding:10px 12px;font-family:var(--display);font-size:14px;color:var(--parchment);max-height:120px;overflow-y:auto;white-space:pre-wrap;"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="field-cancel">Отменить мою правку</button>
+        <button class="field-save">Сохранить мою версию поверх</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(conflictOverlay);
+  const okBtn = conflictOverlay.querySelector('.field-save');
+  const cancelBtn = conflictOverlay.querySelector('.field-cancel');
+  const close = (result)=>{
+    conflictOverlay.classList.remove('show');
+    if(conflictResolve){ const r = conflictResolve; conflictResolve = null; r(result); }
+  };
+  okBtn.addEventListener('click', ()=> close('overwrite'));
+  cancelBtn.addEventListener('click', ()=> close('discard'));
+  conflictOverlay.addEventListener('mousedown', e=>{ if(e.target===conflictOverlay) close('discard'); });
+  conflictOverlay.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.preventDefault(); close('discard'); } });
+}
+function resolveConflict({ fieldLabel, myValue, theirValue }){
+  ensureConflictDom();
+  conflictOverlay.querySelector('.cf-field').textContent = fieldLabel;
+  conflictOverlay.querySelector('.cf-theirs').textContent = theirValue || '(пусто)';
+  conflictOverlay.querySelector('.cf-mine').textContent = myValue || '(пусто)';
+  conflictOverlay.classList.add('show');
+  return new Promise(resolve=>{ conflictResolve = resolve; });
+}

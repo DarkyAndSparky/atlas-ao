@@ -8,6 +8,11 @@ async function api(path, opts={}){
   });
   let data = null;
   try{ data = await res.json(); }catch(e){}
-  if(!res.ok){ throw new Error((data&&data.error) || ('Ошибка запроса: '+res.status)); }
+  if(!res.ok){
+    const err = new Error((data&&data.error) || ('Ошибка запроса: '+res.status));
+    err.status = res.status;
+    err.body = data; // для конфликтов (409) — тут лежит {error:'conflict', current:{...}}, см. resolveConflict() в picker.js
+    throw err;
+  }
   return data;
 }

@@ -230,6 +230,8 @@ function clearMapSelection(){
   renderMapSelectionPanel();
 }
 
+const BULK_TAG_FIELDS = { faction:'Фракция', category:'Категория', climate:'Климат', size:'Размер', holder:'Владелец', type:'Тип', plot:'Сюжет', expansion:'Дополнение' };
+
 function renderMapSelectionPanel(){
   let panel = document.getElementById('mapSelectionPanel');
   const count = state.selectedAllodIds ? state.selectedAllodIds.size : 0;
@@ -246,8 +248,10 @@ function renderMapSelectionPanel(){
   panel.innerHTML = `
     <span>Выбрано: ${count} ${count===1?'остров':'острова(ов)'}</span>
     <button id="mapSelectionAssignBtn">Собрать в архипелаг</button>
+    <button id="mapSelectionBulkTagBtn">Изменить тег</button>
     <button id="mapSelectionClearBtn" title="Снять выделение">✕</button>
   `;
+  document.getElementById('mapSelectionBulkTagBtn').addEventListener('click', ()=> bulkEditTagFlow([...state.selectedAllodIds]));
   document.getElementById('mapSelectionAssignBtn').addEventListener('click', async ()=>{
     const ids = [...state.selectedAllodIds];
     const archs = await loadArchipelagos(true);
@@ -279,4 +283,50 @@ function renderMapSelectionPanel(){
     }catch(e){ toast('Ошибка: '+e.message); }
   });
   document.getElementById('mapSelectionClearBtn').addEventListener('click', clearMapSelection);
+}
+
+/* ---------------- массовое изменение тега у выделенных островов ---------------- */
+async function bulkEditTagFlow(ids){
+  const fieldKey = await pickFromList({
+    title: `Изменить тег у ${ids.length} остров(ов)`,
+    items: Object.values(BULK_TAG_FIELDS),
+    placeholder: 'Какое поле менять…'
+  });
+  if(fieldKey===null || !fieldKey.trim()) return;
+  const field = Object.keys(BULK_TAG_FIELDS).find(k=> BULK_TAG_FIELDS[k]===fieldKey);
+  if(!field) return; // защита на случай несовпадения (не должно происходить — pickFromList тут без allowCreate, выбор строго из списка)
+
+  const existing = [...new Set(state.data.map(d=>d[field]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+  const value = await pickFromList({
+    title: `Новое значение поля «${BULK_TAG_FIELDS[field]}»`,
+    items: existing,
+    allowCreate: true,
+    passEmpty: true,
+    placeholder: `Введите или выберите ${BULK_TAG_FIELDS[field].toLowerCase()}…`
+  });
+  if(value===null) return;
+
+  const ok = await confirmDialog({
+    title:'Применить ко всем выделенным?',
+    message:`Поле «${BULK_TAG_FIELDS[field]}» будет установлено в «${value || '(пусто)'}» сразу у ${ids.length} остров(ов). Это можно отменить только по одному вручную.`,
+    confirmLabel:'Применить'
+  });
+  if(!ok) return;
+
+  const results = await Promise.allSettled(
+    ids.map(id=> api(`/allods/${id}`, { method:'PATCH', body:{ [field]: value } }))
+  );
+  let okCount = 0;
+  results.forEach((r, i)=>{
+    if(r.status==='fulfilled'){
+      const item = byId(ids[i]);
+      if(item){ item[field] = value; item.rev = r.value.rev; }
+      okCount++;
+    }
+  });
+  const failCount = ids.length - okCount;
+  toast(failCount ? `Применено к ${okCount} из ${ids.length}, ${failCount} с ошибкой` : `Применено к ${okCount} остров(ов)`);
+  renderMarkers();
+  if(state.view==='wiki') renderWiki();
+  if((state.view==='detail'||state.view==='location') && ids.includes(state.currentId)) renderDetail();
 }

@@ -397,21 +397,35 @@ function renderLocations(item){
     `;
     const nameEl = block.querySelector('[data-loc-field="name"]');
     wireEditableField(nameEl, block.querySelector(`[data-for="loc-name-${loc.id}"]`), async (val, restoreValue)=>{
+      const result = await patchWithConflict({
+        url: `/locations/${loc.id}`, field:'name', fieldLabel:'Название локации',
+        val, expectedRev: loc.rev,
+        extractTheirValue: current=> (current.locations.find(l=>l.id===loc.id)||{}).name,
+        extractRev: current=> (current.locations.find(l=>l.id===loc.id)||{}).rev
+      });
       loc.name = val;
-      await api(`/locations/${loc.id}`, { method:'PATCH', body:{ name: val } });
+      loc.rev = (result.locations.find(l=>l.id===loc.id)||{}).rev;
       toast('Сохранено', async ()=>{
         loc.name = restoreValue;
-        await api(`/locations/${loc.id}`, { method:'PATCH', body:{ name: restoreValue } });
+        const r = await api(`/locations/${loc.id}`, { method:'PATCH', body:{ name: restoreValue, expectedRev: loc.rev } });
+        loc.rev = (r.locations.find(l=>l.id===loc.id)||{}).rev;
         if(state.currentId===item.id) renderDetail();
       });
     }, { required:true, requiredMsg:'Название локации не может быть пустым — отменено.' });
     const descEl = block.querySelector('[data-loc-field="description"]');
     wireEditableField(descEl, descEl.nextElementSibling, async (val, restoreValue)=>{
+      const result = await patchWithConflict({
+        url: `/locations/${loc.id}`, field:'description', fieldLabel:'Описание локации',
+        val, expectedRev: loc.rev,
+        extractTheirValue: current=> (current.locations.find(l=>l.id===loc.id)||{}).description,
+        extractRev: current=> (current.locations.find(l=>l.id===loc.id)||{}).rev
+      });
       loc.description = val;
-      await api(`/locations/${loc.id}`, { method:'PATCH', body:{ description: val } });
+      loc.rev = (result.locations.find(l=>l.id===loc.id)||{}).rev;
       toast('Сохранено', async ()=>{
         loc.description = restoreValue;
-        await api(`/locations/${loc.id}`, { method:'PATCH', body:{ description: restoreValue } });
+        const r = await api(`/locations/${loc.id}`, { method:'PATCH', body:{ description: restoreValue, expectedRev: loc.rev } });
+        loc.rev = (r.locations.find(l=>l.id===loc.id)||{}).rev;
         if(state.currentId===item.id) renderDetail();
       });
     });
@@ -570,7 +584,19 @@ function wireEditableField(el, actions, saveFn, opts={}){
       hideActions();
       if(!val) el.classList.add('empty');
     }
-    catch(e){ toast('Ошибка сохранения: '+e.message); }
+    catch(e){
+      // saveFn сам разрулил конфликт версий (см. resolveConflict в
+      // detailView.js) и просит только обновить текст в поле — либо на
+      // их версию (пользователь выбрал "отменить мою правку"), либо
+      // просто сброситься без второго тоста об ошибке (retry уже удался
+      // и обработан внутри saveFn как обычный success-путь).
+      if(e && e.__handled){
+        if('newValue' in e){ el.textContent = e.newValue; prevValue = e.newValue; if(!e.newValue) el.classList.add('empty'); }
+        hideActions();
+        return;
+      }
+      toast('Ошибка сохранения: '+e.message);
+    }
   });
 }
 
@@ -711,17 +737,52 @@ function bindProseToolbars(root){
   });
 }
 
+/* ---------------- сохранение поля с обработкой конфликта версий ----------------
+   Общая обвязка над api() PATCH: передаёт expectedRev, и если сервер
+   ответил 409 (кто-то другой уже сохранил это же поле, пока мы его
+   редактировали) — показывает resolveConflict() с их и нашей версией
+   рядом. "Отменить мою правку" — бросает специальную ошибку с
+   __handled:true и their-значением, которую wireEditableField понимает
+   как "просто обнови текст в поле, второй тост об ошибке не нужен".
+   "Сохранить мою версию поверх" — повторяет PATCH уже с их актуальным
+   rev, то есть отдаёт приоритет тому, кто нажал "сохранить" последним. */
+async function patchWithConflict({ url, field, fieldLabel, val, expectedRev, extractTheirValue, extractRev }){
+  try{
+    return await api(url, { method:'PATCH', body:{ [field]: val, expectedRev } });
+  }catch(e){
+    if(e.status===409 && e.body && e.body.current){
+      const theirValue = extractTheirValue(e.body.current);
+      const choice = await resolveConflict({ fieldLabel, myValue: val, theirValue });
+      if(choice==='discard'){
+        const err = new Error('discarded'); err.__handled = true; err.newValue = theirValue;
+        throw err;
+      }
+      return await api(url, { method:'PATCH', body:{ [field]: val, expectedRev: extractRev(e.body.current) } });
+    }
+    throw e;
+  }
+}
+
+const ALLOD_FIELD_LABELS = { name:'Название', description:'Описание', history:'История' };
+
 function bindEditableFields(item){
   detailView.querySelectorAll('[contenteditable="true"][data-field]').forEach(el=>{
     const field = el.dataset.field;
     const actions = el.nextElementSibling && el.nextElementSibling.classList.contains('field-actions')
       ? el.nextElementSibling : null;
     wireEditableField(el, actions, async (val, restoreValue)=>{
+      const result = await patchWithConflict({
+        url: `/allods/${item.id}`, field, fieldLabel: ALLOD_FIELD_LABELS[field] || field,
+        val, expectedRev: item.rev,
+        extractTheirValue: current=> current[field],
+        extractRev: current=> current.rev
+      });
       item[field] = val;
-      await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: val } });
+      item.rev = result.rev;
       toast('Сохранено', async ()=>{
         item[field] = restoreValue;
-        await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: restoreValue } });
+        await api(`/allods/${item.id}`, { method:'PATCH', body:{ [field]: restoreValue, expectedRev: item.rev } })
+          .then(r=>{ item.rev = r.rev; });
         if(state.currentId===item.id && !state.currentLocId) renderDetail();
       });
     }, field==='name' ? { required:true, requiredMsg:'Название острова не может быть пустым — отменено.' } : {});

@@ -456,6 +456,8 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
   font-family:var(--ui);font-size:12px;border-radius:3px;padding:6px 11px;cursor:pointer;
 }
 .map-selection-panel #mapSelectionAssignBtn{background:var(--gold);border:none;color:var(--void-0);font-weight:600;}
+.map-selection-panel #mapSelectionBulkTagBtn{background:none;border:1px solid var(--gold);color:var(--gold-bright);}
+.map-selection-panel #mapSelectionBulkTagBtn:hover{background:var(--gold);color:var(--void-0);}
 .map-selection-panel #mapSelectionClearBtn{background:none;border:1px solid var(--line);color:var(--parchment-dim);}
 .map-selection-panel #mapSelectionClearBtn:hover{border-color:#D85A30;color:#D85A30;}
 
@@ -1013,6 +1015,20 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
 .history-snapshot-body{margin-top:8px;padding:8px 10px;background:var(--void-0);border:1px solid var(--line);border-radius:3px;}
 .history-target{color:var(--gold-bright);text-decoration:none;font-weight:600;}
 .history-target:hover{text-decoration:underline;}
+.rc-filters{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;}
+.rc-diff-toggle{
+  font-family:var(--ui);font-size:11px;color:var(--astral-dim);background:none;border:1px solid var(--line);
+  border-radius:3px;padding:4px 8px;cursor:pointer;
+}
+.rc-diff-toggle:hover{border-color:var(--astral);color:var(--astral);}
+.rc-diff-body{margin-top:8px;padding:10px 12px;background:var(--void-0);border-radius:3px;border:1px solid var(--line);}
+.rc-diff-loading{font-family:var(--ui);font-size:12px;color:var(--parchment-dim);font-style:italic;}
+.rc-diff-field{font-family:var(--ui);font-size:12px;padding:4px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;}
+.rc-diff-label{color:var(--gold-bright);font-weight:600;min-width:110px;}
+.rc-diff-from{color:var(--parchment-dim);text-decoration:line-through;opacity:0.75;}
+.rc-diff-arrow{color:var(--parchment-dim);}
+.rc-diff-to{color:var(--parchment);}
+.rc-diff-empty{font-style:italic;opacity:0.6;}
 #recentChangesBtn{font-size:15px;line-height:1;}
 .entity-source-remove:hover{color:#D85A30;}
 .add-source-btn{
@@ -1112,7 +1128,7 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
   border:1px solid rgba(216,90,48,0.35);border-radius:3px;padding:3px 8px;white-space:nowrap;
 }
 .user-date{font-family:var(--ui);font-size:11px;color:var(--parchment-dim);}
-.user-del,.user-reset-pass{font-size:11.5px;padding:6px 12px;white-space:nowrap;}
+.user-del,.user-reset-pass,.user-scope-btn{font-size:11.5px;padding:6px 12px;white-space:nowrap;}
 
 .deco-manage-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(84px,1fr));gap:10px;margin-bottom:10px;}
 .deco-manage-item{
