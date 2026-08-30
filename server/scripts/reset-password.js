@@ -33,7 +33,8 @@ const ask = (q)=> new Promise(resolve => rl.question(q, resolve));
   const answer = await ask(
     'Введите имя пользователя, чтобы удалить именно этот аккаунт, ' +
     'или "all", чтобы удалить ВСЕ аккаунты сразу (после этого при следующем запуске сервера ' +
-    'снова появится дефолтный admin/admin0000 — см. db.js). Оставьте пустым для отмены: '
+    'снова появится дефолтный admin со свежесгенерированным паролем — он будет напечатан в ' +
+    'консоль при старте, см. db.js). Оставьте пустым для отмены: '
   );
   const trimmed = answer.trim();
   if(!trimmed){
@@ -45,7 +46,7 @@ const ask = (q)=> new Promise(resolve => rl.question(q, resolve));
 
   if(trimmed.toLowerCase() === 'all'){
     const info = db.prepare('DELETE FROM users').run();
-    console.log(`Готово. Удалено аккаунтов: ${info.changes}. При следующем запуске сервера снова появится дефолтный admin/admin0000 (пароль нужно будет сменить при первом входе).`);
+    console.log(`Готово. Удалено аккаунтов: ${info.changes}. При следующем запуске сервера снова появится дефолтный admin со свежесгенерированным паролем — он будет напечатан в консоль при старте (и продублирован в файл .bootstrap-password рядом с базой).`);
   }else{
     const user = users.find(u=> u.username.toLowerCase() === trimmed.toLowerCase());
     if(!user){

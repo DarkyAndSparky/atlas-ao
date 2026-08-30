@@ -27,6 +27,25 @@ const emptyHint = document.getElementById('emptyHint');
 /* ====================== SMALL SHARED HELPERS ====================== */
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Относительное время ("3 дня назад") для бейджа "Обновлено N назад" на
+// странице острова и для истории правок — ms — timestamp в миллисекундах.
+function timeAgo(ms){
+  const diff = Date.now() - ms;
+  const min = 60000, hour = 3600000, day = 86400000, month = 2592000000, year = 31536000000;
+  const pluralRu = (n, one, few, many)=>{
+    const mod10 = n%10, mod100 = n%100;
+    if(mod10===1 && mod100!==11) return one;
+    if(mod10>=2 && mod10<=4 && (mod100<10 || mod100>=20)) return few;
+    return many;
+  };
+  if(diff < min) return 'только что';
+  if(diff < hour){ const n=Math.floor(diff/min); return `${n} ${pluralRu(n,'минуту','минуты','минут')} назад`; }
+  if(diff < day){ const n=Math.floor(diff/hour); return `${n} ${pluralRu(n,'час','часа','часов')} назад`; }
+  if(diff < month){ const n=Math.floor(diff/day); return `${n} ${pluralRu(n,'день','дня','дней')} назад`; }
+  if(diff < year){ const n=Math.floor(diff/month); return `${n} ${pluralRu(n,'месяц','месяца','месяцев')} назад`; }
+  const n=Math.floor(diff/year); return `${n} ${pluralRu(n,'год','года','лет')} назад`;
+}
+
 /* ---------------- лёгкая разметка для .prose (описание/история) ----------------
    Хранится как обычный текст (**жирный**, *курсив*, @Название или @"Название в
    несколько слов"), в режиме редактора показывается как есть (сырой текст —

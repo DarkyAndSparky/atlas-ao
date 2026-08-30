@@ -24,6 +24,18 @@ process.env.ATLAS_TEST_NO_EXIT = '1';
 
 const { createApp } = require('../app');
 
+// Пароль дефолтного admin больше не захардкожен ('admin0000' раньше) —
+// генерируется заново на пустой БД (см. db.js) и дублируется в файл рядом
+// с самой БД. Читаем его оттуда вместо литерала.
+let DEFAULT_PASSWORD;
+function readBootstrapPassword(){
+  const content = fs.readFileSync(path.join(TEST_DIR, '.bootstrap-password'), 'utf-8');
+  const m = content.match(/admin \/ (\S+)/);
+  if(!m) throw new Error('Не удалось распарсить .bootstrap-password: '+content);
+  return m[1];
+}
+
+
 function makeClient(base){
   let cookie = '';
   async function request(method, p, body){
@@ -69,6 +81,7 @@ before(async ()=>{
   server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+  DEFAULT_PASSWORD = readBootstrapPassword();
 });
 
 function freshApp(){
@@ -105,7 +118,7 @@ test('редактор (не admin) не может скачать/восста�
   const admin = makeClient(baseUrl);
   // с седированным дефолтным admin/admin0000 (см. db.js) на свежей БД уже
   // есть аккаунт — регистрация нового пользователя требует входа как admin
-  await admin.post('/api/auth/login', { username:'admin', password:'admin0000' });
+  await admin.post('/api/auth/login', { username:'admin', password:DEFAULT_PASSWORD });
   await admin.post('/api/auth/register', { username:'full-admin', password:'full-admin-pass1', role:'admin' });
   await admin.post('/api/auth/register', { username:'full-editor', password:'full-editor-pass1', role:'editor' });
 

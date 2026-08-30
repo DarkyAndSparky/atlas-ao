@@ -23,6 +23,18 @@ process.env.ATLAS_TEST_NO_EXIT = '1';
 
 const { createApp } = require('../app');
 
+// Пароль дефолтного admin больше не захардкожен ('admin0000' раньше) —
+// генерируется заново на пустой БД (см. db.js) и дублируется в файл рядом
+// с самой БД. Читаем его оттуда вместо литерала.
+let DEFAULT_PASSWORD;
+function readBootstrapPassword(){
+  const content = fs.readFileSync(path.join(TEST_DIR, '.bootstrap-password'), 'utf-8');
+  const m = content.match(/admin \/ (\S+)/);
+  if(!m) throw new Error('Не удалось распарсить .bootstrap-password: '+content);
+  return m[1];
+}
+
+
 function makeClient(){
   let cookie = '';
   async function request(method, p, body){
@@ -57,12 +69,13 @@ before(async ()=>{
   server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+  DEFAULT_PASSWORD = readBootstrapPassword();
 
   const c = makeClient();
   // с седированным дефолтным admin/admin0000 (см. db.js) на свежей БД уже
   // есть аккаунт — регистрация нового пользователя требует входа как admin;
   // restore-tester нужна роль admin — дальше по файлу дёргает /backup/*
-  await c.post('/api/auth/login', { username:'admin', password:'admin0000' });
+  await c.post('/api/auth/login', { username:'admin', password:DEFAULT_PASSWORD });
   await c.post('/api/auth/register', { username:'restore-tester', password:'restore-tester-pass1', role:'admin' });
   await c.post('/api/allods', { name: 'Остров До Бэкапа' });
 

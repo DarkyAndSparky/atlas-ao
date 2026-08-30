@@ -38,6 +38,11 @@ function renderDetail(){
       </div>
       <h1 contenteditable="${state.editorOn}" data-field="name">${escapeHtml(item.name)}</h1>
       ${state.editorOn ? `<div class="field-actions" data-for="name"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
+      ${item.lastUpdatedAt ? (authStatus.loggedIn
+        ? `<button class="last-updated-badge" data-action="jump-to-diff" data-snapshot-id="${escapeHtml(item.lastSnapshotId)}" title="${new Date(item.lastUpdatedAt).toLocaleString('ru-RU')}">Обновлено ${timeAgo(item.lastUpdatedAt)} — что изменилось?</button>`
+        : `<span class="last-updated-badge" style="cursor:default;" title="${new Date(item.lastUpdatedAt).toLocaleString('ru-RU')}">Обновлено ${timeAgo(item.lastUpdatedAt)}</span>`
+      ) : ''}
+      <button class="report-issue-btn" data-action="report-issue" title="Сообщить об ошибке в описании этого острова">⚠ Сообщить об ошибке</button>
       <button class="del-allod editor-hidden" id="delAllodBtn" title="Удалить остров">✕ Удалить остров</button>
       ${item.year_disappeared!=null ? `<div class="destroyed-banner">⚰ Остров уничтожен в ${escapeHtml(String(item.year_disappeared))} году</div>` : ''}
       <div class="tag-row">
@@ -954,22 +959,21 @@ detailView.addEventListener('click', (ev)=>{
   else if(action==='edit-tag'){ editTagField(el.dataset.field); }
   else if(action==='edit-plain'){ editPlainField(el.dataset.field, el.dataset.label); }
   else if(action==='open-detail'){ openDetail(el.dataset.id); }
+  else if(action==='jump-to-diff'){
+    document.getElementById('historySection').scrollIntoView({ behavior:'smooth', block:'start' });
+    renderAllodHistory(document.getElementById('historySection'), state.currentId, el.dataset.snapshotId);
+  }
+  else if(action==='report-issue'){ reportIssueFlow(state.currentId); }
 });
 
 /* ---------------- история правок (снимки) ---------------- */
-// Простая история — не полноценное версионирование: список снимков с
-// датой/автором и кнопкой "посмотреть" (без диффа и без отката, см.
-// обсуждение роадмапа). Видна только вошедшим (тот же уровень доступа, что
-// и у бэкенда — GET .../history требует requireAuth), гостю ничего не показываем.
-const HISTORY_FIELD_LABELS = {
-  name:'Название', climate:'Климат', size:'Размер', holder:'Владелец',
-  faction:'Фракция', type:'Тип', category:'Категория', plot:'Сюжет',
-  expansion:'Дополнение', archipelago:'Архипелаг (текст, устаревшее поле)',
-  description:'Описание', history:'История',
-  year_appeared:'Год появления', year_disappeared:'Год исчезновения',
-};
+// Список снимков с датой/автором и кнопкой "что изменилось?" — разворачивает
+// построчный diff (было → стало), тот же формат, что и в общей ленте
+// последних изменений (rcToggleDiff/rcRenderDiff, см. recentChangesView.js —
+// переиспользуем, чтобы не дублировать логику). Видна только вошедшим (тот
+// же уровень доступа, что и у бэкенда — GET .../history требует requireAuth).
 
-async function renderAllodHistory(wrap, allodId){
+async function renderAllodHistory(wrap, allodId, jumpToSnapshotId){
   if(!authStatus.loggedIn){ wrap.innerHTML=''; return; }
   wrap.innerHTML = `<div class="section-label">История правок</div><div id="historyList">Загрузка…</div>`;
   let snapshots;
@@ -988,32 +992,79 @@ async function renderAllodHistory(wrap, allodId){
         <div class="history-row">
           <span class="history-date">${date}</span>
           <span class="history-author">${s.changed_by ? escapeHtml(s.changed_by) : 'неизвестно кто'}</span>
-          <button class="history-view-btn" data-action="view-snapshot">Посмотреть</button>
+          <button class="rc-diff-toggle" data-action="view-snapshot">Что изменилось?</button>
         </div>
-        <div class="history-snapshot-body" style="display:none"></div>
+        <div class="rc-diff-body" style="display:none"></div>
       </div>
     `;
   }).join('');
 
   listEl.querySelectorAll('[data-action="view-snapshot"]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const item = btn.closest('.history-item');
-      const body = item.querySelector('.history-snapshot-body');
-      const isOpen = body.style.display !== 'none';
-      if(isOpen){ body.style.display='none'; btn.textContent='Посмотреть'; return; }
-      if(!body.dataset.loaded){
-        try{
-          const data = await api(`/allod-snapshots/${item.dataset.snapshotId}`);
-          body.innerHTML = Object.entries(HISTORY_FIELD_LABELS).map(([field,label])=>{
-            const value = data.snapshot[field];
-            if(value===null || value===undefined || value==='') return '';
-            return `<div class="sidebar-fact"><span>${escapeHtml(label)}</span><b>${escapeHtml(String(value))}</b></div>`;
-          }).join('') || `<div class="prose empty" data-empty="Все поля были пустыми на момент этого снимка."></div>`;
-          body.dataset.loaded = '1';
-        }catch(e){ body.innerHTML = `<div class="prose empty" data-empty="Не удалось загрузить снимок."></div>`; }
-      }
-      body.style.display='block';
-      btn.textContent='Скрыть';
-    });
+    btn.addEventListener('click', ()=> rcToggleDiff(btn.closest('.history-item').dataset.snapshotId, btn.closest('.history-item')));
   });
+
+  // Пришли по клику с бейджа "Обновлено N назад — что изменилось?" —
+  // сразу разворачиваем именно эту правку и прокручиваем к ней, а не
+  // заставляем искать её глазами в списке.
+  if(jumpToSnapshotId){
+    const targetItem = listEl.querySelector(`[data-snapshot-id="${CSS.escape(jumpToSnapshotId)}"]`);
+    if(targetItem){
+      targetItem.scrollIntoView({ behavior:'smooth', block:'center' });
+      targetItem.querySelector('[data-action="view-snapshot"]').click();
+    }
+  }
+}
+
+/* ---------------- сообщить об ошибке (гостевая форма) ---------------- */
+// Единственное место на сайте, где может писать вообще кто угодно без
+// аккаунта — форма/эндпоинт спроектированы соответственно: только текст
+// сообщения + необязательный контакт, ничего, что могло бы что-то менять
+// на сайте напрямую (это просто письмо в очередь на бэкенде, которое потом
+// разбирает администратор в «⚙ Настройки»).
+let reportOverlay, reportResolve;
+function ensureReportDom(){
+  if(reportOverlay) return;
+  reportOverlay = document.createElement('div');
+  reportOverlay.className = 'modal-overlay';
+  reportOverlay.innerHTML = `
+    <div class="modal-box" style="width:420px;">
+      <div class="modal-title">Сообщить об ошибке</div>
+      <div class="modal-message">Что не так с этим островом — опечатка, неверный факт, сломанная картинка? Опишите своими словами, администратор разберётся.</div>
+      <textarea class="ef-input rp-message" placeholder="Что заметили…" rows="4" style="margin-top:10px;resize:vertical;"></textarea>
+      <input class="ef-input rp-contact" type="text" placeholder="Как с вами связаться (необязательно) — email, ник и т.п." style="margin-top:8px;">
+      <div class="modal-actions">
+        <button class="field-cancel">Отмена</button>
+        <button class="field-save">Отправить</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(reportOverlay);
+  const msgEl = reportOverlay.querySelector('.rp-message');
+  const contactEl = reportOverlay.querySelector('.rp-contact');
+  const saveBtn = reportOverlay.querySelector('.field-save');
+  const cancelBtn = reportOverlay.querySelector('.field-cancel');
+  const close = (result)=>{ reportOverlay.classList.remove('show'); if(reportResolve){ const r=reportResolve; reportResolve=null; r(result); } };
+  cancelBtn.addEventListener('click', ()=> close(null));
+  saveBtn.addEventListener('click', ()=>{
+    if(!msgEl.value.trim()) return;
+    close({ message: msgEl.value.trim(), contact: contactEl.value.trim() });
+  });
+  reportOverlay.addEventListener('mousedown', e=>{ if(e.target===reportOverlay) close(null); });
+  reportOverlay.addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.preventDefault(); close(null); } });
+  reportOverlay._els = { msgEl, contactEl };
+}
+async function reportIssueFlow(allodId){
+  ensureReportDom();
+  const { msgEl, contactEl } = reportOverlay._els;
+  msgEl.value = ''; contactEl.value = '';
+  reportOverlay.classList.add('show');
+  setTimeout(()=> msgEl.focus(), 0);
+  const result = await new Promise(resolve=>{ reportResolve = resolve; });
+  if(!result) return;
+  try{
+    await api('/reports', { method:'POST', body:{ allodId, message: result.message, contact: result.contact || undefined } });
+    toast('Спасибо, обращение отправлено — администратор его увидит.');
+  }catch(e){
+    toast(e.status===429 ? 'Слишком много обращений подряд — попробуйте чуть позже.' : 'Ошибка: '+e.message);
+  }
 }

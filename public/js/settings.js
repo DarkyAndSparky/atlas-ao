@@ -152,6 +152,7 @@ async function renderConfigPanel(){
   const users = await api('/auth/users').catch(()=>[]);
   const decorations = await api('/decorations').catch(()=>[]);
   const factionIconsList = await api('/factions').catch(()=>[]);
+  const openReports = await api('/reports').catch(()=>[]);
 
   wrap.innerHTML = `
     <div class="config-hero">
@@ -159,6 +160,30 @@ async function renderConfigPanel(){
       <h1>Настройки сайта</h1>
     </div>
     <div class="config-body">
+
+      ${openReports.length ? `
+      <div class="config-card config-card-wide">
+        <h3>⚠ Обращения от читателей <span class="config-badge">${openReports.length}</span></h3>
+        <p class="config-hint">Сообщения «об ошибке», отправленные без входа в аккаунт — читателем, который заметил
+        опечатку или неточность. Не привязаны ни к какому конкретному действию — просто письмо в очередь.</p>
+        <div class="reports-list">
+          ${openReports.map(r=>`
+            <div class="report-item" data-report-id="${escapeHtml(r.id)}">
+              <div class="report-meta">
+                <span class="report-date">${new Date(r.createdAt).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                ${r.allodName ? `<a href="#" class="history-target" data-action="open-detail" data-id="${escapeHtml(r.allodId)}">${escapeHtml(r.allodName)}</a>` : '<span class="report-no-allod">без привязки к острову</span>'}
+                ${r.contact ? `<span class="report-contact">связь: ${escapeHtml(r.contact)}</span>` : ''}
+              </div>
+              <div class="report-message">${escapeHtml(r.message)}</div>
+              <div class="report-actions">
+                <button class="btn-small report-resolve-btn" data-id="${escapeHtml(r.id)}">Решено</button>
+                <button class="btn-small report-delete-btn" data-id="${escapeHtml(r.id)}">Удалить</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ` : ''}
 
       <div class="config-card">
         <h3>📛 Название</h3>
@@ -687,8 +712,28 @@ async function renderConfigPanel(){
 /* configView — тот же DOM-узел на протяжении всей жизни страницы, поэтому один
    делегированный обработчик достаточно повесить один раз при загрузке скрипта. */
 document.getElementById('configView').addEventListener('click', (ev)=>{
-  const el = ev.target.closest('[data-action="show-map"]');
-  if(el) showMap();
+  const showMapEl = ev.target.closest('[data-action="show-map"]');
+  if(showMapEl){ showMap(); return; }
+  const openDetailEl = ev.target.closest('[data-action="open-detail"]');
+  if(openDetailEl){ ev.preventDefault(); openDetail(openDetailEl.dataset.id); return; }
+  const resolveBtn = ev.target.closest('.report-resolve-btn');
+  if(resolveBtn){
+    api('/reports/'+resolveBtn.dataset.id, { method:'PATCH', body:{ resolved:true } })
+      .then(()=>{ toast('Отмечено решённым'); renderConfigPanel(); })
+      .catch(e=> toast('Ошибка: '+e.message));
+    return;
+  }
+  const deleteBtn = ev.target.closest('.report-delete-btn');
+  if(deleteBtn){
+    confirmDialog({ title:'Удалить обращение?', message:'Без возможности восстановить.', confirmLabel:'Удалить', danger:true })
+      .then(ok=>{
+        if(!ok) return;
+        return api('/reports/'+deleteBtn.dataset.id, { method:'DELETE' })
+          .then(()=>{ toast('Удалено'); renderConfigPanel(); })
+          .catch(e=> toast('Ошибка: '+e.message));
+      });
+    return;
+  }
 });
 
 /* ---------------- pickProjectScope ---------------- */

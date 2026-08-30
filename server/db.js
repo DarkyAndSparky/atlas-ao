@@ -16,7 +16,18 @@ try{
 
 const DB_PATH = process.env.ATLAS_DB_PATH || path.join(__dirname, 'atlas.db');
 const isNew = !fs.existsSync(DB_PATH);
+// Права на файл БД (плюс WAL/SHM-сайдкары, которые SQLite создаёт сам чуть
+// позже, при первой записи в WAL-режиме — их не поймать разовым chmodSync,
+// поэтому umask важнее самого chmod ниже) — в БД лежат хэши паролей
+// пользователей (scrypt+соль — не обратимые напрямую, но offline-перебор
+// слабого пароля по утёкшему хэшу всё равно реален) и site_settings.
+// process.umask() — глобальная настройка процесса, а не файла: применяется
+// ко всем файлам, которые процесс создаст дальше (uploads/, backups/ —
+// тоже не помешает). Идемпотентно, безопасно звать даже если server.js
+// уже выставил то же самое раньше.
+process.umask(0o077);
 const db = new DatabaseSync(DB_PATH);
+try{ fs.chmodSync(DB_PATH, 0o600); }catch(e){ /* не критично — не на всех ФС (напр. read-only) возможно */ }
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
@@ -260,6 +271,20 @@ CREATE TABLE IF NOT EXISTS allod_snapshots (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_allod_snapshots_allod ON allod_snapshots(allod_id, created_at DESC);
+
+-- Обращения гостей ("сообщить об ошибке") — единственная точка на сайте,
+-- где может писать вообще кто угодно без аккаунта. allod_id опционален
+-- (общий отзыв не про конкретный остров тоже возможен). resolved — админ
+-- отмечает разобранные, чтобы не разгребать список заново каждый раз.
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  allod_id TEXT REFERENCES allods(id) ON DELETE SET NULL,
+  message TEXT NOT NULL,
+  contact TEXT,
+  created_at INTEGER NOT NULL,
+  resolved INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_reports_resolved ON reports(resolved, created_at DESC);
 `);
 
 const hasAllodsFtsTriggers = db.prepare(
@@ -444,28 +469,74 @@ if(userCols.length && !userCols.includes('allowed_projects')){
   db.exec('ALTER TABLE users ADD COLUMN allowed_projects TEXT');
 }
 
-// дефолтный аккаунт admin/admin0000 — защита от дурака: если на сервере
-// вообще нет ни одного пользователя (совсем свежая база, и легаси-миграция
-// выше не сработала — например, ей неоткуда было взять старый аккаунт),
-// заводим его сами, а не оставляем сайт без единого способа войти до тех
-// пор, пока кто-то не пройдёт полностью безопасный, но необязательный
-// bootstrap-экран регистрации. must_change_password=1 — форсируем смену
-// пароля при первом входе (см. requireAuth-гейт на фронтенде и в /auth).
+// дефолтный аккаунт admin/<случайный пароль> — защита от дурака: если на
+// сервере вообще нет ни одного пользователя (совсем свежая база, и
+// легаси-миграция выше не сработала — например, ей неоткуда было взять
+// старый аккаунт), заводим его сами, а не оставляем сайт без единого
+// способа войти до тех пор, пока кто-то не пройдёт полностью безопасный,
+// но необязательный bootstrap-экран регистрации. must_change_password=1 —
+// форсируем смену пароля при первом входе (см. requireAuth-гейт на
+// фронтенде и в /auth).
+//
+// Пароль генерируется заново при каждом создании этого дефолтного
+// аккаунта, а не захардкожен строкой в коде — раньше здесь было
+// 'admin0000' у каждой установки этого проекта, что превращало "дефолтный
+// пароль поменяйте после установки" в реальную дыру для тех, кто это не
+// сделал вовремя. Печатается в консоль КРУПНО, чтобы не потерялся в потоке
+// прочих логов запуска, и на всякий случай (если консоль всё же
+// проскроллили/не сохранили) дублируется в файл .bootstrap-password рядом
+// с самой БД (тот же каталог, что и atlas.db — так путь автоматически
+// совпадает с ATLAS_DB_PATH/ATLAS_DATA_DIR, если они переопределены, и
+// тесты с временными БД не конфликтуют друг с другом за один файл) — тот
+// же паттерн, что и у server/.session-secret (см. config.js), тоже в
+// .gitignore, не коммитится. Файл стоит удалить после первого входа.
 {
   const hasAnyUserNow = db.prepare('SELECT id FROM users LIMIT 1').get();
   if(!hasAnyUserNow){
-    console.log('На сервере нет ни одного аккаунта — создаю дефолтный: admin / admin0000 (пароль нужно будет сменить при первом входе).');
+    // Безопасный для чтения глазами алфавит — без 0/O/1/l/I, которые легко
+    // перепутать при переписывании пароля с экрана вручную. 16 символов —
+    // с запасом даже для разового пароля, который всё равно попросят
+    // сменить при первом входе.
+    const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const password = Array.from(crypto.randomBytes(16))
+      .map(b => ALPHABET[b % ALPHABET.length])
+      .join('');
+    const salt = crypto.randomBytes(16).toString('hex');
     // scryptSync — не async hashPassword() из security/passwords.js: это
     // разовое вычисление при самом старте сервера, ДО того как он начал
     // принимать запросы, а не под конкурентной нагрузкой — как раз тот
     // случай, когда блокировка event loop на пару сотен мс совершенно не
     // страшна (в отличие от логина под нагрузкой, ради которого там был
     // переход на асинхронный scrypt).
-    const crypto = require('crypto');
-    const salt = crypto.randomBytes(16).toString('hex');
-    const hash = crypto.scryptSync('admin0000', salt, 64).toString('hex');
+    const hash = crypto.scryptSync(password, salt, 64).toString('hex');
     db.prepare('INSERT INTO users (username, salt, hash, role, must_change_password, created_at) VALUES (?,?,?,?,?,?)')
       .run('admin', salt, hash, 'admin', 1, Date.now());
+
+    const banner = [
+      '',
+      '╔══════════════════════════════════════════════════════════════╗',
+      '║  На сервере не было ни одного аккаунта — создан дефолтный:     ',
+      '║                                                                  ',
+      `║    логин:  admin                                                `,
+      `║    пароль: ${password}                                `,
+      '║                                                                  ',
+      '║  Пароль нужно будет сменить при первом входе.                   ',
+      '║  Он же продублирован в .bootstrap-password рядом с базой —      ',
+      '║  удалите этот файл после первого входа.                         ',
+      '╚══════════════════════════════════════════════════════════════╝',
+      '',
+    ].join('\n');
+    console.log(banner);
+
+    try{
+      fs.writeFileSync(
+        path.join(path.dirname(DB_PATH), '.bootstrap-password'),
+        `admin / ${password}\n(создано ${new Date().toISOString()}, удалите этот файл после первого входа)\n`,
+        { mode: 0o600 }
+      );
+    }catch(e){
+      console.warn('Не удалось записать .bootstrap-password рядом с базой (не критично, пароль уже выше в консоли):', e.message);
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const helmet = require('helmet');
@@ -17,6 +18,7 @@ const sourcesRouter = require('./routes/sources');
 const timelineRouter = require('./routes/timeline');
 const archipelagosRouter = require('./routes/archipelagos');
 const searchRouter = require('./routes/search');
+const reportsRouter = require('./routes/reports');
 const { router: systemRouter } = require('./routes/system');
 const seoRouter = require('./routes/seo');
 const { UPLOAD_DIR } = require('./upload');
@@ -113,6 +115,7 @@ function createApp(){
   app.use('/api', timelineRouter);
   app.use('/api', archipelagosRouter);
   app.use('/api', searchRouter);
+  app.use('/api', reportsRouter);
   app.use('/api/system', systemRouter);
 
   app.use(seoRouter);
@@ -125,8 +128,60 @@ function createApp(){
   // понятной ошибки.
   app.use('/api', (req, res)=> res.status(404).json({ error: 'Такого маршрута нет.' }));
 
+  // Динамические OG-теги для превью ссылок на конкретный остров в
+  // мессенджерах/соцсетях. SPA без серверного рендеринга не может отдать
+  // разный <title>/og:* по разным путям сама — до этого места весь сайт
+  // всегда отдавал один и тот же index.html с одинаковыми (общими) OG-
+  // тегами независимо от открытой страницы. Патчим шаблон точечной
+  // подменой content="..." у конкретных тегов, только когда путь реально
+  // указывает на существующий остров — иначе (и при любой ошибке чтения
+  // БД) отдаём файл как есть, тем же путём, что и раньше.
+  const indexHtmlPath = path.join(__dirname, '..', 'public', 'index.html');
+  let indexHtmlTemplate = null;
+  function getIndexHtmlTemplate(){
+    // Кэшируем прочитанный файл в памяти процесса — он не меняется во время
+    // работы сервера (не пользовательский контент), перечитывать с диска
+    // на каждый запрос смысла нет.
+    if(indexHtmlTemplate === null) indexHtmlTemplate = fs.readFileSync(indexHtmlPath, 'utf-8');
+    return indexHtmlTemplate;
+  }
+  function escapeAttr(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function patchMeta(html, { title, description, image, url }){
+    let out = html;
+    if(title){
+      out = out.replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(title)}</title>`);
+      out = out.replace(/(property="og:title" content=")[^"]*(")/, `$1${escapeAttr(title)}$2`);
+    }
+    if(description){
+      out = out.replace(/(name="description" content=")[^"]*(")/, `$1${escapeAttr(description)}$2`);
+      out = out.replace(/(property="og:description" content=")[^"]*(")/, `$1${escapeAttr(description)}$2`);
+    }
+    if(image) out = out.replace(/(property="og:image" content=")[^"]*(")/, `$1${escapeAttr(image)}$2`);
+    if(url) out = out.replace(/(property="og:url" content=")[^"]*(")/, `$1${escapeAttr(url)}$2`);
+    return out;
+  }
+
   app.get('*', (req, res)=>{
-    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+    const allodMatch = req.path.match(/^\/allod\/([^/]+)\/[^/]*\/?$/);
+    if(allodMatch){
+      try{
+        const db = require('./db');
+        const row = db.prepare('SELECT name, description FROM allods WHERE id=?').get(allodMatch[1]);
+        if(row){
+          const base = getIndexHtmlTemplate();
+          const description = (row.description || '').trim();
+          const html = patchMeta(base, {
+            title: `${row.name} — Атлас Аллодов`,
+            description: description ? (description.length > 200 ? description.slice(0,200)+'…' : description) : undefined,
+            url: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
+          });
+          res.set('Content-Type', 'text/html; charset=utf-8');
+          res.send(html);
+          return;
+        }
+      }catch(e){ /* БД недоступна или остров не найден — отдаём общий index.html ниже, не 500 */ }
+    }
+    res.sendFile(indexHtmlPath);
   });
 
   // Единая обработка ошибок. БЕЗ этого обработчика Express использует свой

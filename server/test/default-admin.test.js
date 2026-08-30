@@ -1,7 +1,10 @@
-// Тесты дефолтного аккаунта admin/admin0000 (см. db.js) — защита от дурака:
-// на свежей базе без единого аккаунта сервер сам создаёт admin/admin0000
-// с обязательной сменой пароля при первом входе. Отдельный файл — своя
-// изолированная БД, чтобы не зависеть от порядка/состояния auth.test.js.
+// Тесты дефолтного аккаунта admin/<сгенерированный пароль> (см. db.js) —
+// защита от дурака: на свежей базе без единого аккаунта сервер сам
+// создаёт admin со случайным паролем (не захардкоженным — раньше здесь
+// было 'admin0000' для каждой установки этого проекта, это был реальный
+// риск для тех, кто не поменял его вовремя).
+// Отдельный файл — своя изолированная БД, чтобы не зависеть от
+// порядка/состояния auth.test.js.
 
 const path = require('path');
 const fs = require('fs');
@@ -18,13 +21,25 @@ process.env.SESSION_SECRET = 'test-secret-not-for-production';
 const { createApp } = require('../app');
 
 let server, baseUrl;
+let DEFAULT_PASSWORD; // читаем после создания приложения — см. before() ниже
 
 before(async ()=>{
   const app = createApp();
   server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+  DEFAULT_PASSWORD = readBootstrapPassword();
 });
+
+// Пароль больше не захардкожен ('admin0000' раньше) — генерируется заново
+// при каждом запуске на пустой БД (см. db.js) и дублируется в файл рядом
+// с самой БД. Читаем его оттуда, а не подбираем/угадываем.
+function readBootstrapPassword(){
+  const content = fs.readFileSync(path.join(TEST_DIR, '.bootstrap-password'), 'utf-8');
+  const m = content.match(/admin \/ (\S+)/);
+  if(!m) throw new Error('Не удалось распарсить .bootstrap-password: '+content);
+  return m[1];
+}
 
 after(async ()=>{
   await new Promise(resolve => server.close(resolve));
@@ -66,9 +81,9 @@ test('на свежей базе hasAccount=true с самого начала �
   assert.equal(r.data.loggedIn, false);
 });
 
-test('admin/admin0000 логинится и требует смены пароля (mustChangePassword=true)', async ()=>{
+test('admin со сгенерированным паролем логинится и требует смены пароля (mustChangePassword=true)', async ()=>{
   const c = makeClient();
-  const r = await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  const r = await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   assert.equal(r.status, 200);
   assert.equal(r.data.user.role, 'admin');
   assert.equal(r.data.user.mustChangePassword, true);
@@ -79,7 +94,7 @@ test('admin/admin0000 логинится и требует смены парол
 
 test('дефолтный admin виден в списке пользователей с mustChangePassword=true', async ()=>{
   const c = makeClient();
-  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   const users = await c.get('/api/auth/users');
   const admin = users.data.find(u=>u.username==='admin');
   assert.ok(admin);
@@ -88,7 +103,7 @@ test('дефолтный admin виден в списке пользовател
 
 test('нельзя удалить дефолтный admin, пока это единственный аккаунт на сервере', async ()=>{
   const c = makeClient();
-  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   const users = await c.get('/api/auth/users');
   const admin = users.data.find(u=>u.username==='admin');
 
@@ -97,13 +112,13 @@ test('нельзя удалить дефолтный admin, пока это ед
   assert.match(del.data.error, /последнего оставшегося/);
 
   // аккаунт реально никуда не делся
-  const stillThere = await makeClient().post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  const stillThere = await makeClient().post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   assert.equal(stillThere.status, 200);
 });
 
 test('форс-смена пароля (must_change_password=1) НЕ требует текущий пароль — сессия уже аутентифицирована', async ()=>{
   const admin = makeClient();
-  await admin.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await admin.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   await admin.post('/api/auth/register', { username: 'forced-user', password: 'temp-password-1' }); // роль по умолчанию editor, must_change_password=1
 
   const c = makeClient();
@@ -133,15 +148,15 @@ test('обычная (не форс) смена пароля по-прежнем
 
 test('смена пароля дефолтного admin снимает mustChangePassword', async ()=>{
   const c = makeClient();
-  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
-  const change = await c.post('/api/auth/password', { currentPassword: 'admin0000', newPassword: 'a-much-better-password1' });
+  await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
+  const change = await c.post('/api/auth/password', { currentPassword: DEFAULT_PASSWORD, newPassword: 'a-much-better-password1' });
   assert.equal(change.status, 200);
 
   const status = await c.get('/api/auth/status');
   assert.equal(status.data.mustChangePassword, false);
 
-  // старый пароль admin0000 больше не подходит, новый — подходит
-  const oldLogin = await makeClient().post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  // старый (сгенерированный) пароль больше не подходит, новый — подходит
+  const oldLogin = await makeClient().post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   assert.equal(oldLogin.status, 401);
   const newLogin = await makeClient().post('/api/auth/login', { username: 'admin', password: 'a-much-better-password1' });
   assert.equal(newLogin.status, 200);

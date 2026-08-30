@@ -1,6 +1,6 @@
 {
   "name": "atlas-allods-server",
-  "version": "0.1.0+v26w35-4",
+  "version": "0.1.0+v26w35-8",
   "description": "Локальный сервер Атласа Аллодов: SQLite + Express",
   "main": "server.js",
   "license": "MIT",

@@ -6,6 +6,7 @@ server/atlas.db
 server/atlas.db-shm
 server/atlas.db-wal
 server/.session-secret
+.bootstrap-password
 server/.https-cert/
 certs/
 acme-webroot/

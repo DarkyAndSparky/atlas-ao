@@ -18,6 +18,18 @@ process.env.SESSION_SECRET = 'test-secret-not-for-production';
 
 const { createApp } = require('../app');
 
+// Пароль дефолтного admin больше не захардкожен ('admin0000' раньше) —
+// генерируется заново на пустой БД (см. db.js) и дублируется в файл рядом
+// с самой БД. Читаем его оттуда вместо литерала.
+let DEFAULT_PASSWORD;
+function readBootstrapPassword(){
+  const content = fs.readFileSync(path.join(TEST_DIR, '.bootstrap-password'), 'utf-8');
+  const m = content.match(/admin \/ (\S+)/);
+  if(!m) throw new Error('Не удалось распарсить .bootstrap-password: '+content);
+  return m[1];
+}
+
+
 let server, baseUrl;
 
 before(async ()=>{
@@ -25,6 +37,7 @@ before(async ()=>{
   server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+  DEFAULT_PASSWORD = readBootstrapPassword();
 });
 
 after(async ()=>{
@@ -83,28 +96,28 @@ test('дефолтный admin/admin0000 существует с самого н
 
 test('слишком короткий пароль отклоняется при регистрации приглашённого (нужны права admin)', async ()=>{
   const c = makeClient();
-  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   const r = await c.post('/api/auth/register', { username: 'tester', password: 'ab' });
   assert.equal(r.status, 400);
 });
 
 test('пароль короче 8 символов отклоняется (граница)', async ()=>{
   const c = makeClient();
-  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   const r = await c.post('/api/auth/register', { username: 'tester', password: '1234567' }); // 7 символов
   assert.equal(r.status, 400);
 });
 
 test('некорректное имя пользователя отклоняется', async ()=>{
   const c = makeClient();
-  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   const r = await c.post('/api/auth/register', { username: 'ab', password: 'correcthorsebattery' }); // короче 3 символов
   assert.equal(r.status, 400);
 });
 
 test('дефолтный admin создаёт "atlant" вторым admin, затем удаляет сам дефолтный аккаунт', async ()=>{
   const c = makeClient();
-  await c.post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  await c.post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   const reg = await c.post('/api/auth/register', { username: 'atlant', password: 'correcthorsebattery', role: 'admin' });
   assert.equal(reg.status, 200);
 
@@ -117,7 +130,7 @@ test('дефолтный admin создаёт "atlant" вторым admin, за�
   assert.equal(del.status, 200);
   assert.equal(del.data.selfDeleted, true);
 
-  const loginDeleted = await makeClient().post('/api/auth/login', { username: 'admin', password: 'admin0000' });
+  const loginDeleted = await makeClient().post('/api/auth/login', { username: 'admin', password: DEFAULT_PASSWORD });
   assert.equal(loginDeleted.status, 401, 'дефолтного admin больше не существует');
 
   // atlant остался единственным аккаунтом, с этого момента — дальнейшие

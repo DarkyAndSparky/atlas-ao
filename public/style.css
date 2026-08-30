@@ -676,6 +676,16 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
 .prose-toolbar button:hover{border-color:var(--gold);color:var(--gold-bright);}
 .prose-tag-link{color:var(--astral);text-decoration:none;border-bottom:1px dotted var(--astral-dim);cursor:pointer;}
 .prose-tag-link:hover{color:var(--astral);border-bottom-style:solid;}
+.last-updated-badge{
+  display:block;margin:4px 0 10px;font-family:var(--ui);font-size:11.5px;color:var(--parchment-dim);
+  background:none;border:none;padding:0;cursor:pointer;text-align:left;opacity:0.8;
+}
+.last-updated-badge:hover{color:var(--astral);opacity:1;text-decoration:underline;}
+.report-issue-btn{
+  display:block;margin:2px 0 10px;font-family:var(--ui);font-size:11.5px;color:var(--parchment-dim);
+  background:none;border:none;padding:0;cursor:pointer;text-align:left;opacity:0.7;
+}
+.report-issue-btn:hover{color:var(--imperial);opacity:1;text-decoration:underline;}
 .at-autocomplete{
   position:absolute;z-index:50;width:260px;max-height:220px;
   background:var(--void-1);border:1px solid var(--gold);border-radius:4px;
@@ -1096,6 +1106,17 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
 .config-card-wide{grid-column:1 / -1;}
 .config-card h3{font-family:var(--display);font-size:16px;color:var(--gold-bright);margin:0 0 14px;}
 .config-hint{font-family:var(--ui);font-size:12px;color:var(--parchment-dim);margin:0 0 14px;line-height:1.6;}
+.config-badge{
+  display:inline-block;background:var(--imperial);color:#fff;font-size:11px;font-weight:700;
+  border-radius:10px;padding:1px 8px;margin-left:6px;vertical-align:middle;
+}
+.reports-list{display:flex;flex-direction:column;gap:10px;}
+.report-item{background:var(--void-0);border:1px solid var(--line);border-radius:4px;padding:10px 12px;}
+.report-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--ui);font-size:11px;color:var(--parchment-dim);margin-bottom:6px;}
+.report-no-allod{font-style:italic;opacity:0.7;}
+.report-contact{opacity:0.8;}
+.report-message{font-family:var(--display);font-size:14px;color:var(--parchment);white-space:pre-wrap;margin-bottom:8px;}
+.report-actions{display:flex;gap:8px;}
 .config-label{display:block;font-family:var(--ui);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--parchment-dim);margin-bottom:8px;}
 .config-input{
   width:100%;background:var(--void-0);color:var(--parchment);border:1px solid var(--line);

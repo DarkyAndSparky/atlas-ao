@@ -13,7 +13,14 @@ function fullAllod(row){
       gallery: db.prepare("SELECT id, url, caption FROM gallery WHERE owner_type='location' AND owner_id=? ORDER BY sort_order").all(loc.id)
     }));
   const gallery = db.prepare("SELECT id, url, caption FROM gallery WHERE owner_type='allod' AND owner_id=? ORDER BY sort_order").all(row.id);
-  return { ...row, hasMap: !!row.hasMap, locations, gallery };
+  // Последняя правка — по самому свежему снимку в allod_snapshots (снимок
+  // пишется ДО применения изменения, см. комментарий у INSERT в PATCH ниже,
+  // так что MAX(created_at) снимка — это и есть момент последней правки).
+  // Если снимков нет вообще — остров с момента создания ни разу не
+  // редактировали, `lastUpdatedAt: null` — это легитимное состояние, не
+  // ошибка, фронтенд просто не показывает бейдж «обновлено N назад».
+  const lastSnap = db.prepare('SELECT id, MAX(created_at) as t FROM allod_snapshots WHERE allod_id=?').get(row.id);
+  return { ...row, hasMap: !!row.hasMap, locations, gallery, lastUpdatedAt: lastSnap.t || null, lastSnapshotId: lastSnap.t ? lastSnap.id : null };
 }
 
 /* ---------------- allods ---------------- */

@@ -202,15 +202,15 @@ async function loadSystemInfo(){
 
     document.getElementById('aboutTechGrid').innerHTML = info.technologies.map(t => `
       <div class="about-tech-item">
-        <span class="about-tech-icon">${t.icon}</span>
-        <div><div class="about-tech-name">${t.name}</div><div class="about-tech-desc">${t.desc}</div></div>
+        <span class="about-tech-icon">${escapeHtml(t.icon)}</span>
+        <div><div class="about-tech-name">${escapeHtml(t.name)}</div><div class="about-tech-desc">${escapeHtml(t.desc)}</div></div>
       </div>
     `).join('');
 
     document.getElementById('aboutDepsTable').innerHTML = info.dependencies.map(d => `
-      <div class="about-deps-row" data-dep="${d.name}">
-        <span>${d.name}</span>
-        <b class="${d.installed ? 'dep-ok' : ''}">${d.installed || '—'} <span style="opacity:.5;">(${d.range})</span></b>
+      <div class="about-deps-row" data-dep="${escapeHtml(d.name)}">
+        <span>${escapeHtml(d.name)}</span>
+        <b class="${d.installed ? 'dep-ok' : ''}">${escapeHtml(d.installed || '—')} <span style="opacity:.5;">(${escapeHtml(d.range)})</span></b>
       </div>
     `).join('');
 

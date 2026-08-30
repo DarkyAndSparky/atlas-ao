@@ -17,6 +17,18 @@ process.env.SESSION_SECRET = 'test-secret-not-for-production';
 
 const { createApp } = require('../app');
 
+// Пароль дефолтного admin больше не захардкожен ('admin0000' раньше) —
+// генерируется заново на пустой БД (см. db.js) и дублируется в файл рядом
+// с самой БД. Читаем его оттуда вместо литерала.
+let DEFAULT_PASSWORD;
+function readBootstrapPassword(){
+  const content = fs.readFileSync(path.join(TEST_DIR, '.bootstrap-password'), 'utf-8');
+  const m = content.match(/admin \/ (\S+)/);
+  if(!m) throw new Error('Не удалось распарсить .bootstrap-password: '+content);
+  return m[1];
+}
+
+
 let server, baseUrl;
 
 before(async ()=>{
@@ -24,8 +36,9 @@ before(async ()=>{
   server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+  DEFAULT_PASSWORD = readBootstrapPassword();
   const seedAdmin = makeClient();
-  await seedAdmin.post('/api/auth/login', { username:'admin', password:'admin0000' });
+  await seedAdmin.post('/api/auth/login', { username:'admin', password:DEFAULT_PASSWORD });
   const reg = await seedAdmin.post('/api/auth/register', { username:'searcheditor', password:'search-editor-pass1', role:'admin' });
   assert.equal(reg.status, 200);
 });
