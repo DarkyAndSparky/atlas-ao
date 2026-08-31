@@ -166,11 +166,11 @@ router.post('/register', async (req, res, next)=>{
 
 router.post('/login', async (req, res, next)=>{
   try{
-    const lockState = rateLimiter.checkLocked(req);
+    const username = (req.body.username || '').trim();
+    const lockState = rateLimiter.checkLocked(req, username);
     if(lockState.locked){
       return res.status(429).json({ error: `Слишком много неудачных попыток. Повторите через ${lockState.secondsLeft} сек.` });
     }
-    const username = (req.body.username || '').trim();
     const user = findUserByUsername(username);
     const { password } = req.body;
     // сверяем пароль даже если пользователь не найден (с фиктивной солью) —
@@ -179,10 +179,10 @@ router.post('/login', async (req, res, next)=>{
       ? await verifyPassword(password || '', user.salt, user.hash)
       : (await hashPassword(password || '', 'нет-такого-имени-пользователя'), false);
     if(!ok){
-      rateLimiter.registerFailure(req);
+      rateLimiter.registerFailure(req, username);
       return res.status(401).json({ error: 'Неверное имя пользователя или пароль.' });
     }
-    rateLimiter.registerSuccess(req);
+    rateLimiter.registerSuccess(req, username);
     // Пересоздаём ID сессии при входе (не просто переиспользуем текущий) —
     // защита от session fixation: если у кого-то был заранее известный ID
     // сессии этого браузера (до входа), после логина он не станет валидным

@@ -249,7 +249,7 @@ function renderMapSelectionPanel(){
     <span>Выбрано: ${count} ${count===1?'остров':'острова(ов)'}</span>
     <button id="mapSelectionAssignBtn">Собрать в архипелаг</button>
     <button id="mapSelectionBulkTagBtn">Изменить тег</button>
-    <button id="mapSelectionClearBtn" title="Снять выделение">✕</button>
+    <button id="mapSelectionClearBtn" title="Снять выделение" aria-label="Снять выделение островов">✕</button>
   `;
   document.getElementById('mapSelectionBulkTagBtn').addEventListener('click', ()=> bulkEditTagFlow([...state.selectedAllodIds]));
   document.getElementById('mapSelectionAssignBtn').addEventListener('click', async ()=>{

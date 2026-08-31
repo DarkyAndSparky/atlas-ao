@@ -56,8 +56,8 @@
     <div class="spacer"></div>
     <input type="file" id="importInput" accept="application/json" style="display:none">
     <input type="file" id="restoreDbInput" accept=".db" style="display:none">
-    <button id="themeQuickToggle" type="button" title="Сменить тему оформления">🌗</button>
-    <button class="btn" id="recentChangesBtn" style="display:none;" title="Последние изменения по всему сайту">🕘</button>
+    <button id="themeQuickToggle" type="button" title="Сменить тему оформления" aria-label="Сменить тему оформления">🌗</button>
+    <button class="btn" id="recentChangesBtn" style="display:none;" title="Последние изменения по всему сайту" aria-label="Последние изменения по всему сайту">🕘</button>
     <button id="editorToggle">Редактор</button>
     <button class="btn" id="authBtn">Войти</button>
     <button class="btn" id="configBtn" style="display:none;">⚙ Настройки</button>
@@ -120,34 +120,34 @@
     <div id="emptyHint">Ни один остров ещё не размещён на карте.<br>Включите редактор и перетащите остров из списка слева.</div>
   </div>
 
-  <button id="drawToggleBtn" type="button" title="Инструменты рисования">🖌</button>
+  <button id="drawToggleBtn" type="button" title="Инструменты рисования" aria-label="Инструменты рисования">🖌</button>
 
   <div id="drawToolbar">
-    <button class="draw-tool" data-tool="text" title="Текстовая подпись">T</button>
-    <button class="draw-tool" data-tool="line" title="Линия">╱</button>
-    <button class="draw-tool" data-tool="arrow" title="Стрелка">↗</button>
-    <button class="draw-tool" data-tool="rect" title="Прямоугольник">▭</button>
-    <button class="draw-tool" data-tool="circle" title="Круг">◯</button>
-    <button class="draw-tool" data-tool="polygon" title="Многоугольник (кликайте точки, двойной клик или Enter — завершить, Esc — отмена)">⬠</button>
-    <button class="draw-tool" data-tool="freehand" title="Рисование от руки">〰</button>
-    <button class="draw-tool" data-tool="icon" title="Украшение (картинка)">🖼</button>
-    <button class="draw-tool" data-tool="erase" title="Стереть пометку">✕</button>
+    <button class="draw-tool" data-tool="text" title="Текстовая подпись" aria-label="Текстовая подпись">T</button>
+    <button class="draw-tool" data-tool="line" title="Линия" aria-label="Линия">╱</button>
+    <button class="draw-tool" data-tool="arrow" title="Стрелка" aria-label="Стрелка">↗</button>
+    <button class="draw-tool" data-tool="rect" title="Прямоугольник" aria-label="Прямоугольник">▭</button>
+    <button class="draw-tool" data-tool="circle" title="Круг" aria-label="Круг">◯</button>
+    <button class="draw-tool" data-tool="polygon" title="Многоугольник (кликайте точки, двойной клик или Enter — завершить, Esc — отмена)" aria-label="Многоугольник">⬠</button>
+    <button class="draw-tool" data-tool="freehand" title="Рисование от руки" aria-label="Рисование от руки">〰</button>
+    <button class="draw-tool" data-tool="icon" title="Украшение (картинка)" aria-label="Украшение (картинка)">🖼</button>
+    <button class="draw-tool" data-tool="erase" title="Стереть пометку" aria-label="Стереть пометку">✕</button>
     <div class="draw-colors">
-      <button class="draw-color active" data-color="#e8c874" style="background:#e8c874" title="Золотой"></button>
-      <button class="draw-color" data-color="#e2695f" style="background:#e2695f" title="Красный"></button>
-      <button class="draw-color" data-color="#6fd3d9" style="background:#6fd3d9" title="Голубой"></button>
-      <button class="draw-color" data-color="#8fd96f" style="background:#8fd96f" title="Зелёный"></button>
-      <button class="draw-color" data-color="#f2f2f2" style="background:#f2f2f2" title="Белый"></button>
+      <button class="draw-color active" data-color="#e8c874" style="background:#e8c874" title="Золотой" aria-label="Цвет: золотой"></button>
+      <button class="draw-color" data-color="#e2695f" style="background:#e2695f" title="Красный" aria-label="Цвет: красный"></button>
+      <button class="draw-color" data-color="#6fd3d9" style="background:#6fd3d9" title="Голубой" aria-label="Цвет: голубой"></button>
+      <button class="draw-color" data-color="#8fd96f" style="background:#8fd96f" title="Зелёный" aria-label="Цвет: зелёный"></button>
+      <button class="draw-color" data-color="#f2f2f2" style="background:#f2f2f2" title="Белый" aria-label="Цвет: белый"></button>
     </div>
 
     <div class="draw-slider-row">
       <label for="drawStrokeWidth" title="Толщина линии">━</label>
-      <input type="range" id="drawStrokeWidth" min="1" max="16" step="1" value="2">
+      <input type="range" id="drawStrokeWidth" min="1" max="16" step="1" value="2" aria-label="Толщина линии">
       <span id="drawStrokeWidthVal" class="draw-slider-val">2</span>
     </div>
     <div class="draw-slider-row">
       <label for="drawOpacity" title="Прозрачность">◑</label>
-      <input type="range" id="drawOpacity" min="10" max="100" step="10" value="100">
+      <input type="range" id="drawOpacity" min="10" max="100" step="10" value="100" aria-label="Прозрачность">
       <span id="drawOpacityVal" class="draw-slider-val">100%</span>
     </div>
 
@@ -163,9 +163,9 @@
   </div>
 
   <div id="zoomCtrl">
-    <button id="zoomIn">+</button>
-    <button id="zoomReset">⟲</button>
-    <button id="zoomOut">−</button>
+    <button id="zoomIn" title="Увеличить" aria-label="Увеличить масштаб карты">+</button>
+    <button id="zoomReset" title="Сбросить масштаб" aria-label="Сбросить масштаб карты">⟲</button>
+    <button id="zoomOut" title="Уменьшить" aria-label="Уменьшить масштаб карты">−</button>
   </div>
 
   <div id="timelineSliderBar">
@@ -192,10 +192,10 @@
   <div id="detailView"></div>
 
   <div id="lightbox">
-    <button class="lb-close" id="lbClose">✕</button>
-    <button class="lb-nav lb-prev" id="lbPrev">‹</button>
+    <button class="lb-close" id="lbClose" title="Закрыть" aria-label="Закрыть просмотр изображения">✕</button>
+    <button class="lb-nav lb-prev" id="lbPrev" title="Предыдущее" aria-label="Предыдущее изображение">‹</button>
     <img id="lbImg" src="" alt="">
-    <button class="lb-nav lb-next" id="lbNext">›</button>
+    <button class="lb-nav lb-next" id="lbNext" title="Следующее" aria-label="Следующее изображение">›</button>
     <div class="lb-count" id="lbCount"></div>
   </div>
 

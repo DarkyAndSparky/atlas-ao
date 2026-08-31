@@ -221,7 +221,7 @@ async function renderEntitySources(wrap, entityType, entityId){
     listEl.innerHTML = refs.map(({ref, source})=>`
       <div class="entity-source-item" data-ref-id="${escapeHtml(ref.id)}">
         <span>${source.url ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a>` : escapeHtml(source.title)}${ref.note ? ` <span class="note">— ${escapeHtml(ref.note)}</span>` : ''}</span>
-        ${state.editorOn ? `<button class="entity-source-remove" data-action="remove-entity-source" title="Отвязать источник">✕</button>` : ''}
+        ${state.editorOn ? `<button class="entity-source-remove" data-action="remove-entity-source" title="Отвязать источник" aria-label="Отвязать источник">✕</button>` : ''}
       </div>
     `).join('');
   }

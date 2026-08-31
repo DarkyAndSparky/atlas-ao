@@ -2,12 +2,18 @@
 set -e
 cd "$(dirname "$0")/server"
 
-if [ ! -d node_modules ]; then
+DEPS_STATUS=$(node scripts/check-deps-fresh.js 2>/dev/null || echo "STALE")
+if [ "$DEPS_STATUS" = "MISSING" ]; then
   echo "Зависимости ещё не установлены. Устанавливаю сейчас..."
   echo "Это может занять минуту-другую (особенно первый раз) — подождите."
   npm install
   echo ""
   echo "Зависимости установлены. Запускаю сервер..."
+  echo ""
+elif [ "$DEPS_STATUS" = "STALE" ]; then
+  echo "package-lock.json изменился с последней установки — обновляю зависимости..."
+  echo "Это может занять минуту-другую — подождите."
+  npm install
   echo ""
 fi
 

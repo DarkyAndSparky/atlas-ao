@@ -20,6 +20,10 @@ services:
       dockerfile: Dockerfile
     image: atlas-allods:latest
     restart: unless-stopped
+    # graceful shutdown (server.js слушает SIGTERM/SIGINT) обычно укладывается
+    # в пару секунд, но 15с — с запасом на случай зависших keep-alive соединений
+    # (сам server.js всё равно принудительно выходит через 8с, см. gracefulShutdown)
+    stop_grace_period: 15s
     environment:
       # /app/data и не /app — базу и uploads держим отдельно от кода в именованных
       # томах, чтобы `docker compose up --build` (пересборка образа) их не задевал.

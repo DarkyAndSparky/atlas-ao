@@ -58,14 +58,14 @@ function renderDetail(){
         <div>
           <div class="section">
             <div class="section-label">Описание</div>
-            ${state.editorOn ? `<div class="prose-toolbar" data-for="description"><button data-md="**" title="Жирный">Ж</button><button data-md="*" title="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)">@</button></div>` : ''}
+            ${state.editorOn ? `<div class="prose-toolbar" data-for="description"><button data-md="**" title="Жирный" aria-label="Жирный текст">Ж</button><button data-md="*" title="Курсив" aria-label="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)" aria-label="Вставить ссылку на остров">@</button></div>` : ''}
             <div class="prose ${item.description?'':'empty'}" data-empty="Описание ещё не добавлено — включите редактор, чтобы написать его."
                  contenteditable="${state.editorOn}" data-field="description">${state.editorOn ? escapeHtml(item.description) : parseProse(item.description)}</div>
             ${state.editorOn ? `<div class="field-actions" data-for="description"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
           </div>
           <div class="section">
             <div class="section-label">История</div>
-            ${state.editorOn ? `<div class="prose-toolbar" data-for="history"><button data-md="**" title="Жирный">Ж</button><button data-md="*" title="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)">@</button></div>` : ''}
+            ${state.editorOn ? `<div class="prose-toolbar" data-for="history"><button data-md="**" title="Жирный" aria-label="Жирный текст">Ж</button><button data-md="*" title="Курсив" aria-label="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)" aria-label="Вставить ссылку на остров">@</button></div>` : ''}
             <div class="prose ${item.history?'':'empty'}" data-empty="История аллода ещё не записана."
                  contenteditable="${state.editorOn}" data-field="history">${state.editorOn ? escapeHtml(item.history) : parseProse(item.history)}</div>
             ${state.editorOn ? `<div class="field-actions" data-for="history"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
@@ -391,10 +391,10 @@ function renderLocations(item){
       <div class="loc-head">
         ${state.editorOn ? `<span class="loc-drag" title="Перетащите, чтобы изменить порядок">⠿</span>` : ''}
         <div class="loc-name" contenteditable="${state.editorOn}" data-loc-field="name">${escapeHtml(loc.name)}</div>
-        <button class="del">✕</button>
+        <button class="del" title="Удалить локацию" aria-label="Удалить локацию «${escapeHtml(loc.name)}»">✕</button>
       </div>
       ${state.editorOn ? `<div class="field-actions" data-for="loc-name-${loc.id}"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
-      ${state.editorOn ? `<div class="prose-toolbar" data-for="loc-desc-${loc.id}"><button data-md="**" title="Жирный">Ж</button><button data-md="*" title="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров">@</button></div>` : ''}
+      ${state.editorOn ? `<div class="prose-toolbar" data-for="loc-desc-${loc.id}"><button data-md="**" title="Жирный" aria-label="Жирный текст">Ж</button><button data-md="*" title="Курсив" aria-label="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров" aria-label="Вставить ссылку на остров">@</button></div>` : ''}
       <div class="prose loc-desc ${loc.description?'':'empty'}" data-empty="Описание локации ещё не добавлено."
            contenteditable="${state.editorOn}" data-loc-field="description">${state.editorOn ? escapeHtml(loc.description) : parseProse(loc.description)}</div>
       ${state.editorOn ? `<div class="field-actions" data-for="loc-desc-${loc.id}"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}

@@ -300,7 +300,7 @@ async function renderConfigPanel(){
             <div class="deco-manage-item" title="${escapeHtml(d.name)}">
               <img src="${escapeHtml(d.url)}" alt="${escapeHtml(d.name)}">
               <span>${escapeHtml(d.name)}</span>
-              <button class="deco-del" data-id="${escapeHtml(d.id)}" data-name="${escapeHtml(d.name)}" title="Удалить">✕</button>
+              <button class="deco-del" data-id="${escapeHtml(d.id)}" data-name="${escapeHtml(d.name)}" title="Удалить" aria-label="Удалить украшение «${escapeHtml(d.name)}»">✕</button>
             </div>`).join('') || '<p class="config-hint">Пока ничего нет.</p>'}
         </div>
         <h4 class="config-subhead">Добавить украшение</h4>
@@ -326,7 +326,7 @@ async function renderConfigPanel(){
               </label>
               <input type="text" class="faction-name-input config-input" value="${escapeHtml(f.faction)}"
                      data-id="${escapeHtml(f.id)}" data-prev="${escapeHtml(f.faction)}">
-              <button class="icon-del-btn faction-del" data-id="${escapeHtml(f.id)}" data-name="${escapeHtml(f.faction)}" title="Удалить">✕</button>
+              <button class="icon-del-btn faction-del" data-id="${escapeHtml(f.id)}" data-name="${escapeHtml(f.faction)}" title="Удалить" aria-label="Удалить иконку фракции «${escapeHtml(f.faction)}»">✕</button>
             </div>`).join('') || '<p class="config-hint">Пока ничего нет.</p>'}
         </div>
         <h4 class="config-subhead">Добавить фракцию</h4>

@@ -3,7 +3,10 @@ setlocal
 chcp 65001 >nul 2>&1
 cd /d "%~dp0server"
 
-if not exist node_modules (
+for /f "delims=" %%D in ('node scripts\check-deps-fresh.js 2^>nul') do set DEPS_STATUS=%%D
+if not defined DEPS_STATUS set DEPS_STATUS=STALE
+
+if "%DEPS_STATUS%"=="MISSING" (
   echo Зависимости ещё не установлены. Устанавливаю сейчас...
   echo ЭТО МОЖЕТ ЗАНЯТЬ МИНУТУ-ДВЕ ^(особенно первый раз^) — НЕ ЗАКРЫВАЙТЕ ОКНО,
   echo даже если кажется, что ничего не происходит.
@@ -16,6 +19,17 @@ if not exist node_modules (
   )
   echo.
   echo Зависимости установлены. Запускаю сервер...
+  echo.
+) else if "%DEPS_STATUS%"=="STALE" (
+  echo package-lock.json изменился с последней установки — обновляю зависимости...
+  echo ЭТО МОЖЕТ ЗАНЯТЬ МИНУТУ-ДВЕ — НЕ ЗАКРЫВАЙТЕ ОКНО.
+  echo.
+  call npm install
+  if errorlevel 1 (
+    echo Обновление зависимостей не удалось. Проверьте сообщение выше.
+    pause
+    exit /b 1
+  )
   echo.
 )
 

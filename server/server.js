@@ -142,7 +142,7 @@ function startNativeHttps(){
   const httpsPort = process.env.ATLAS_HTTPS_PORT || 9311;
   const redirectPort = process.env.ATLAS_HTTP_REDIRECT_PORT || 9312;
 
-  https.createServer({ key: resolved.key, cert: resolved.cert }, app).listen(httpsPort, ()=>{
+  const httpsServer = https.createServer({ key: resolved.key, cert: resolved.cert }, app).listen(httpsPort, ()=>{
     const localUrl = printBanner({
       proto: 'https', port: httpsPort,
       extraLines: [
@@ -153,19 +153,68 @@ function startNativeHttps(){
     });
     if(process.env.ATLAS_OPEN_BROWSER === '1') openBrowser(localUrl);
   });
+  activeServers.push(httpsServer);
 
-  http.createServer((req, res)=> serveAcmeChallengeOrRedirect(req, res, httpsPort)).listen(redirectPort, ()=>{
+  const redirectServer = http.createServer((req, res)=> serveAcmeChallengeOrRedirect(req, res, httpsPort)).listen(redirectPort, ()=>{
     console.log(`[HTTP→HTTPS] Редирект с порта ${redirectPort} на ${httpsPort}`);
   });
+  activeServers.push(redirectServer);
 }
 
 function startPlainHttp(){
   const port = process.env.PORT || 4173;
-  app.listen(port, ()=>{
+  const plainServer = app.listen(port, ()=>{
     const localUrl = printBanner({ proto: 'http', port });
     if(process.env.ATLAS_OPEN_BROWSER === '1') openBrowser(localUrl);
   });
+  activeServers.push(plainServer);
 }
+
+// Список HTTP(S)-серверов, реально слушающих порт в этом процессе — либо
+// один (обычный HTTP), либо два (HTTPS + редирект-сервер на HTTP). Нужен
+// для штатной остановки ниже: без этого списка graceful shutdown не знал
+// бы, какие именно серверы закрывать.
+const activeServers = [];
 
 if(process.env.ATLAS_NATIVE_HTTPS === '1') startNativeHttps();
 else startPlainHttp();
+
+// Без обработчиков SIGTERM/SIGINT `docker stop`/`docker-compose down`
+// (шлют SIGTERM) убивают процесс немедленно — Express не успевает
+// доотдать уже начатые запросы, backupScheduler-интервал не очищается,
+// никакого финального WAL-checkpoint. У Атласа это не потеря данных
+// (node:sqlite в WAL-режиме пишет транзакционно сразу на диск, а не
+// держит всё в памяти до явного экспорта, как в некоторых других
+// проектах с БД в памяти) — но штатная остановка всё равно дешёвая
+// гигиена, а не опция, особенно с уже существующим production
+// docker-compose.yml (healthcheck, restart-policy — это явно готовится
+// к реальному деплою, не только локальный запуск).
+function gracefulShutdown(signal){
+  console.log(`\n[${signal}] Получен сигнал остановки — завершаю работу...`);
+  let pending = activeServers.length;
+  if(pending === 0){ finalizeShutdown(); return; }
+  activeServers.forEach(srv=>{
+    srv.close(()=>{
+      pending--;
+      if(pending === 0) finalizeShutdown();
+    });
+  });
+  // На случай зависших keep-alive соединений, которые не дают server.close()
+  // вызвать колбэк вовремя — не ждём вечно, даём процессу выйти в любом случае.
+  setTimeout(()=>{
+    console.warn('Не все соединения закрылись вовремя — выхожу принудительно.');
+    finalizeShutdown();
+  }, 8000).unref();
+}
+let shutdownFinalized = false;
+function finalizeShutdown(){
+  if(shutdownFinalized) return; // setTimeout и обычный путь могут сработать оба — выходим только один раз
+  shutdownFinalized = true;
+  try{
+    require('./db').exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  }catch(e){ /* не критично — WAL и так восстановится автоматически при следующем открытии */ }
+  console.log('Готово, до встречи.');
+  process.exit(0);
+}
+process.on('SIGTERM', ()=> gracefulShutdown('SIGTERM'));
+process.on('SIGINT', ()=> gracefulShutdown('SIGINT'));
