@@ -117,12 +117,19 @@ router.patch('/allods/:id', requireAuth, (req, res)=>{
     if(f in updates) updates[f] = (updates[f] === '' || updates[f] === undefined) ? null : (updates[f]===null ? null : Number(updates[f]));
   }
   if(Object.keys(updates).length===0) return res.json(fullAllod(row));
+  res.json(applyAllodFieldsUpdate(row, updates, req.session.username || null));
+});
+
+// Общий "хвост" применения изменений к живому острову — снимок ДО правки,
+// сама UPDATE, инкремент rev. Переиспользуется и обычным PATCH выше, и
+// публикацией черновика ниже (routes/drafts.js) — один и тот же путь кода,
+// не две отдельные реализации одного и того же.
+function applyAllodFieldsUpdate(row, updates, changedBy){
   // снимок ДО применения изменений — если правка что-то случайно стёрла,
   // именно предыдущее состояние (а не то, что получилось после) даёт шанс
-  // восстановить потерянное. Снимаем только когда реально что-то меняется
-  // (проверка выше) — иначе история заполнялась бы пустыми "изменениями".
+  // восстановить потерянное.
   db.prepare('INSERT INTO allod_snapshots (id, allod_id, allod_name, snapshot_json, changed_by, created_at) VALUES (?,?,?,?,?,?)')
-    .run('snap_' + crypto.randomBytes(6).toString('hex'), row.id, row.name, JSON.stringify(row), req.session.username || null, Date.now());
+    .run('snap_' + crypto.randomBytes(6).toString('hex'), row.id, row.name, JSON.stringify(row), changedBy, Date.now());
   if('hasMap' in updates) updates.hasMap = updates.hasMap ? 1 : 0;
   // icon_url/location_map_url можно сменить на другую ссылку или очистить —
   // если старое значение указывало на локально загруженный файл (а не внешний
@@ -136,9 +143,9 @@ router.patch('/allods/:id', requireAuth, (req, res)=>{
   const setSql = Object.keys(updates).map(k=>`${k}=@${k}`).join(', ') + ', rev = COALESCE(rev,0) + 1';
   // better-sqlite3 бросает ошибку на лишние именованные параметры в .run(),
   // поэтому в объект биндинга кладём ровно те ключи, что есть в setSql, плюс id.
-  db.prepare(`UPDATE allods SET ${setSql} WHERE id=@id`).run({ ...updates, id: req.params.id });
-  res.json(fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(req.params.id)));
-});
+  db.prepare(`UPDATE allods SET ${setSql} WHERE id=@id`).run({ ...updates, id: row.id });
+  return fullAllod(db.prepare('SELECT * FROM allods WHERE id=?').get(row.id));
+}
 
 // список снимков — без snapshot_json (может быть увесистым при длинной
 // истории/истории острова с большим description) — только то, что нужно
@@ -484,4 +491,4 @@ router.post('/import', requireAdmin, (req, res)=>{
   res.json({ ok: true, count: rows.length, cleanedFiles });
 });
 
-module.exports = router;
+module.exports = { router, fullAllod, applyAllodFieldsUpdate };

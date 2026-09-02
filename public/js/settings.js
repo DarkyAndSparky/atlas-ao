@@ -254,19 +254,25 @@ async function renderConfigPanel(){
         понадобится сбросить всех, это делается на сервере командой <code>npm run reset-password</code>.
         Кнопкой «Проекты»/«Все проекты» у редактора можно ограничить его правки конкретными
         проектами (например, если человек ведёт только один раздел) — на администраторов
-        ограничение не действует.</p>
+        ограничение не действует. «Заблокировать» — в отличие от сброса пароля, блокирует
+        немедленно: все текущие сессии этого пользователя (уже открытые вкладки) обрываются
+        сразу же, а не только при следующей попытке входа; снять блокировку можно в любой
+        момент. Нельзя заблокировать последнего активного администратора — по той же причине,
+        по которой нельзя его удалить или понизить в роли.</p>
         <div class="users-list" id="usersList">
           ${users.map(u=>`
-            <div class="user-row">
-              <span class="user-name">${escapeHtml(u.username)}${u.username===authStatus.username ? ' <em>(вы)</em>' : ''}</span>
+            <div class="user-row ${u.disabled ? 'user-row-disabled' : ''}">
+              <span class="user-name">${escapeHtml(u.username)}${u.username===authStatus.username ? ' <em>(вы)</em>' : ''}${u.disabled ? ' <span class="user-disabled-tag">заблокирован</span>' : ''}</span>
               <select class="user-role-select" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}">
                 <option value="editor" ${u.role==='editor'?'selected':''}>редактор</option>
                 <option value="admin" ${u.role==='admin'?'selected':''}>администратор</option>
               </select>
               <span class="user-date">с ${new Date(u.createdAt).toLocaleDateString('ru-RU')}</span>
+              <span class="user-date" title="${u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('ru-RU') : ''}">${u.lastLoginAt ? 'вход ' + timeAgo(u.lastLoginAt) : 'ни разу не входил'}</span>
               ${u.role==='editor' ? `<button class="btn user-scope-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}" title="Ограничить редактирование конкретными проектами">${u.allowedProjects ? `Проекты: ${u.allowedProjects.length}` : 'Все проекты'}</button>` : ''}
               ${u.mustChangePassword ? '<span class="user-reset-pending" title="При следующем входе потребуется сменить пароль">ожидает смены пароля</span>' : ''}
               <button class="btn user-reset-pass" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}" title="Заставить сменить пароль при следующем входе">Сбросить пароль</button>
+              <button class="btn user-toggle-disabled" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}" data-disabled="${u.disabled}" title="${u.disabled ? 'Снять блокировку — пользователь снова сможет войти' : 'Заблокировать — немедленно завершит все текущие сессии и запретит вход, пока не разблокируете'}">${u.disabled ? 'Разблокировать' : 'Заблокировать'}</button>
               ${users.length>1 ? `<button class="btn user-del" data-user-id="${u.id}" data-user-name="${escapeHtml(u.username)}">Удалить</button>` : ''}
             </div>`).join('')}
         </div>
@@ -498,6 +504,28 @@ async function renderConfigPanel(){
       try{
         await api('/auth/users/'+id, { method:'PATCH', body:{ forcePasswordReset:true } });
         toast('При следующем входе "'+name+'" потребуется сменить пароль');
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
+    });
+  });
+
+  document.querySelectorAll('.user-toggle-disabled').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.userId;
+      const name = btn.dataset.userName;
+      const isCurrentlyDisabled = btn.dataset.disabled === 'true';
+      const ok = await confirmDialog({
+        title: isCurrentlyDisabled ? 'Снять блокировку?' : 'Заблокировать пользователя?',
+        message: isCurrentlyDisabled
+          ? `«${name}» снова сможет входить в аккаунт.`
+          : `«${name}» немедленно потеряет доступ — все его текущие сессии (уже открытые вкладки) завершатся сразу же, не дожидаясь выхода. Снять блокировку можно в любой момент.`,
+        confirmLabel: isCurrentlyDisabled ? 'Разблокировать' : 'Заблокировать',
+        danger: !isCurrentlyDisabled
+      });
+      if(!ok) return;
+      try{
+        await api('/auth/users/'+id, { method:'PATCH', body:{ disabled: !isCurrentlyDisabled } });
+        toast(isCurrentlyDisabled ? `«${name}» разблокирован` : `«${name}» заблокирован`);
         renderConfigPanel();
       }catch(e){ toast('Ошибка: '+e.message); }
     });

@@ -59,7 +59,7 @@ function countUsers(){
 }
 
 function publicUser(u){
-  return { id: u.id, username: u.username, role: u.role, mustChangePassword: !!u.must_change_password, createdAt: u.created_at, allowedProjects: parseAllowedProjects(u.allowed_projects) };
+  return { id: u.id, username: u.username, role: u.role, mustChangePassword: !!u.must_change_password, createdAt: u.created_at, allowedProjects: parseAllowedProjects(u.allowed_projects), disabled: !!u.disabled, lastLoginAt: u.last_login_at || null };
 }
 
 // allowed_projects в БД хранится как JSON-строка массива или NULL. Раньше
@@ -97,7 +97,7 @@ router.get('/status', (req, res)=>{
 
 // Список редакторов — для панели «Настройки → Пользователи» (только админ).
 router.get('/users', requireAdmin, (req, res)=>{
-  const users = db.prepare('SELECT id, username, role, must_change_password, created_at, allowed_projects FROM users ORDER BY created_at ASC').all();
+  const users = db.prepare('SELECT id, username, role, must_change_password, created_at, allowed_projects, disabled, last_login_at FROM users ORDER BY created_at ASC').all();
   res.json(users.map(publicUser));
 });
 
@@ -182,7 +182,16 @@ router.post('/login', async (req, res, next)=>{
       rateLimiter.registerFailure(req, username);
       return res.status(401).json({ error: 'Неверное имя пользователя или пароль.' });
     }
+    if(user.disabled){
+      // Пароль уже проверен выше (не раньше) — блокировка не должна давать
+      // побочный канал типа "это точно валидный аккаунт, раз дошли до этой
+      // проверки" быстрее, чем обычная проверка пароля. Не считаем это
+      // неудачной попыткой для rate-limit — аккаунт заблокирован
+      // администратором, это не подбор пароля.
+      return res.status(403).json({ error: 'Этот аккаунт заблокирован администратором.' });
+    }
     rateLimiter.registerSuccess(req, username);
+    db.prepare('UPDATE users SET last_login_at=? WHERE id=?').run(Date.now(), user.id);
     // Пересоздаём ID сессии при входе (не просто переиспользуем текущий) —
     // защита от session fixation: если у кого-то был заранее известный ID
     // сессии этого браузера (до входа), после логина он не станет валидным
@@ -264,6 +273,37 @@ router.patch('/users/:id', requireAdmin, (req, res)=>{
     if(req.session.userId === id) req.session.role = role;
   }
 
+  if('disabled' in req.body){
+    const disabled = !!req.body.disabled;
+    if(disabled && user.role === 'admin'){
+      // та же защита, что и на понижение роли/удаление — нельзя оставить
+      // сайт без единого способа управлять настройками
+      const activeAdmins = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='admin' AND disabled=0 AND id<>?").get(id).n;
+      if(activeAdmins < 1) return res.status(400).json({ error: 'Нельзя заблокировать последнего активного администратора.' });
+    }
+    db.prepare('UPDATE users SET disabled=? WHERE id=?').run(disabled ? 1 : 0, id);
+    if(disabled){
+      // Мягкая блокировка — но не настолько мягкая, чтобы уже открытая
+      // вкладка заблокированного пользователя продолжала работать до его
+      // следующего логина. Сессии у нас хранятся в той же БД (см.
+      // sessionStore.js), а не в памяти процесса — можем убить все активные
+      // сессии этого пользователя прямо сейчас, одним запросом, без похода
+      // в express-session API и без добавления запроса к БД на каждый
+      // авторизованный запрос сайта (тот же компромисс, что и у role/
+      // allowedProjects — не перечитываем БД на каждый requireAuth).
+      try{
+        const sessions = db.prepare('SELECT sid, sess FROM sessions').all();
+        const toKill = sessions.filter(s=>{
+          try{ return JSON.parse(s.sess).userId === id; }catch(e){ return false; }
+        }).map(s=>s.sid);
+        if(toKill.length){
+          const placeholders = toKill.map(()=>'?').join(',');
+          db.prepare(`DELETE FROM sessions WHERE sid IN (${placeholders})`).run(...toKill);
+        }
+      }catch(e){ /* не критично — в худшем случае сессия доживёт до истечения */ }
+    }
+  }
+
   if('allowedProjects' in req.body){
     const parsed = validateAllowedProjects(req.body.allowedProjects);
     if(parsed.error) return res.status(400).json({ error: parsed.error });
@@ -282,7 +322,7 @@ router.patch('/users/:id', requireAdmin, (req, res)=>{
     db.prepare('UPDATE users SET must_change_password=1 WHERE id=?').run(id);
   }
 
-  res.json(publicUser(db.prepare('SELECT id, username, role, must_change_password, created_at, allowed_projects FROM users WHERE id=?').get(id)));
+  res.json(publicUser(db.prepare('SELECT id, username, role, must_change_password, created_at, allowed_projects, disabled, last_login_at FROM users WHERE id=?').get(id)));
 });
 
 // Удаление чужого (или своего) аккаунта редактора — только админ. Нельзя

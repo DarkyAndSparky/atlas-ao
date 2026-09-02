@@ -29,6 +29,14 @@ function renderDetail(){
   const facCls = facClass(item.faction);
   const heroImg = item.gallery && item.gallery.length ? item.gallery[0].url : null;
   const heroStyle = heroImg ? `style="background-image:url('${escapeHtml(heroImg)}')"` : '';
+  // Режим черновика — свой на каждый открытый остров (не персистится между
+  // навигациями). Пока он включён, name/description/history показывают и
+  // редактируют ЧЕРНОВЫЕ значения (state.draftContent), а не live —
+  // остальные поля острова (теги, галерея и т.п.) драфт не покрывает,
+  // остаются live как обычно. Доступно только в режиме редактора — у
+  // черновика нет смысла без прав на публикацию.
+  const inDraftMode = state.editorOn && state.draftModeAllodId === item.id;
+  const src = inDraftMode ? (state.draftContent || item) : item;
   detailView.innerHTML = `
     <div class="detail-hero${heroImg?' has-image':''}" ${heroStyle}>
       <div class="breadcrumb">
@@ -36,7 +44,16 @@ function renderDetail(){
         ${renderBreadcrumbArchipelago(item)}
         / ${escapeHtml(item.name)}
       </div>
-      <h1 contenteditable="${state.editorOn}" data-field="name">${escapeHtml(item.name)}</h1>
+      ${inDraftMode ? `
+      <div class="draft-banner">
+        <span>📝 Вы редактируете черновик — эти изменения ещё не опубликованы и не видны остальным.</span>
+        <div class="draft-banner-actions">
+          <button data-action="draft-exit">Свернуть (черновик сохранён)</button>
+          <button data-action="draft-discard">Отклонить черновик</button>
+          <button data-action="draft-publish" class="draft-publish-btn">Опубликовать</button>
+        </div>
+      </div>` : (state.editorOn ? `<button class="draft-enter-btn" data-action="draft-enter" title="Редактировать название/описание/историю как черновик, не затрагивая опубликованную версию">📝 Работать с черновиком</button>` : '')}
+      <h1 contenteditable="${state.editorOn}" data-field="name">${escapeHtml(src.name)}</h1>
       ${state.editorOn ? `<div class="field-actions" data-for="name"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
       ${item.lastUpdatedAt ? (authStatus.loggedIn
         ? `<button class="last-updated-badge" data-action="jump-to-diff" data-snapshot-id="${escapeHtml(item.lastSnapshotId)}" title="${new Date(item.lastUpdatedAt).toLocaleString('ru-RU')}">Обновлено ${timeAgo(item.lastUpdatedAt)} — что изменилось?</button>`
@@ -59,15 +76,15 @@ function renderDetail(){
           <div class="section">
             <div class="section-label">Описание</div>
             ${state.editorOn ? `<div class="prose-toolbar" data-for="description"><button data-md="**" title="Жирный" aria-label="Жирный текст">Ж</button><button data-md="*" title="Курсив" aria-label="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)" aria-label="Вставить ссылку на остров">@</button></div>` : ''}
-            <div class="prose ${item.description?'':'empty'}" data-empty="Описание ещё не добавлено — включите редактор, чтобы написать его."
-                 contenteditable="${state.editorOn}" data-field="description">${state.editorOn ? escapeHtml(item.description) : parseProse(item.description)}</div>
+            <div class="prose ${src.description?'':'empty'}" data-empty="Описание ещё не добавлено — включите редактор, чтобы написать его."
+                 contenteditable="${state.editorOn}" data-field="description">${state.editorOn ? escapeHtml(src.description) : parseProse(src.description)}</div>
             ${state.editorOn ? `<div class="field-actions" data-for="description"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
           </div>
           <div class="section">
             <div class="section-label">История</div>
             ${state.editorOn ? `<div class="prose-toolbar" data-for="history"><button data-md="**" title="Жирный" aria-label="Жирный текст">Ж</button><button data-md="*" title="Курсив" aria-label="Курсив"><i>К</i></button><button data-md="@" title="Ссылка на остров (@Название или @&quot;Два слова&quot;)" aria-label="Вставить ссылку на остров">@</button></div>` : ''}
-            <div class="prose ${item.history?'':'empty'}" data-empty="История аллода ещё не записана."
-                 contenteditable="${state.editorOn}" data-field="history">${state.editorOn ? escapeHtml(item.history) : parseProse(item.history)}</div>
+            <div class="prose ${src.history?'':'empty'}" data-empty="История аллода ещё не записана."
+                 contenteditable="${state.editorOn}" data-field="history">${state.editorOn ? escapeHtml(src.history) : parseProse(src.history)}</div>
             ${state.editorOn ? `<div class="field-actions" data-for="history"><button class="field-save">Сохранить</button><button class="field-cancel">Отмена</button></div>` : ''}
           </div>
           <div class="section">
@@ -771,10 +788,23 @@ async function patchWithConflict({ url, field, fieldLabel, val, expectedRev, ext
 const ALLOD_FIELD_LABELS = { name:'Название', description:'Описание', history:'История' };
 
 function bindEditableFields(item){
+  const inDraftMode = state.editorOn && state.draftModeAllodId === item.id;
   detailView.querySelectorAll('[contenteditable="true"][data-field]').forEach(el=>{
     const field = el.dataset.field;
     const actions = el.nextElementSibling && el.nextElementSibling.classList.contains('field-actions')
       ? el.nextElementSibling : null;
+    if(inDraftMode){
+      // Черновик — без конфликт-резолюшена (нет понятия rev у драфта, см.
+      // routes/drafts.js — сознательно упрощено, один черновик на остров,
+      // последнее сохранение побеждает). Save просто PUT на /draft и
+      // обновление state.draftContent локально, без patchWithConflict.
+      wireEditableField(el, actions, async (val)=>{
+        const result = await api(`/allods/${item.id}/draft`, { method:'PUT', body:{ [field]: val } });
+        state.draftContent = result;
+        toast('Черновик сохранён (ещё не опубликован)');
+      }, field==='name' ? { required:true, requiredMsg:'Название не может быть пустым — отменено.' } : {});
+      return;
+    }
     wireEditableField(el, actions, async (val, restoreValue)=>{
       const result = await patchWithConflict({
         url: `/allods/${item.id}`, field, fieldLabel: ALLOD_FIELD_LABELS[field] || field,
@@ -964,6 +994,10 @@ detailView.addEventListener('click', (ev)=>{
     renderAllodHistory(document.getElementById('historySection'), state.currentId, el.dataset.snapshotId);
   }
   else if(action==='report-issue'){ reportIssueFlow(state.currentId); }
+  else if(action==='draft-enter'){ draftEnterFlow(state.currentId); }
+  else if(action==='draft-exit'){ state.draftModeAllodId = null; state.draftContent = null; renderDetail(); }
+  else if(action==='draft-discard'){ draftDiscardFlow(state.currentId); }
+  else if(action==='draft-publish'){ draftPublishFlow(state.currentId); }
 });
 
 /* ---------------- история правок (снимки) ---------------- */
@@ -1067,4 +1101,54 @@ async function reportIssueFlow(allodId){
   }catch(e){
     toast(e.status===429 ? 'Слишком много обращений подряд — попробуйте чуть позже.' : 'Ошибка: '+e.message);
   }
+}
+
+/* ---------------- черновик острова ---------------- */
+async function draftEnterFlow(allodId){
+  try{
+    const draft = await api(`/allods/${allodId}/draft`);
+    const item = byId(allodId);
+    // Черновика ещё не было — стартуем с live-значений (тот же принцип, что
+    // и на бэкенде при первом PUT: черновик изначально = копия live, дальше
+    // редактируется независимо). Реальная запись в БД появится только при
+    // первом сохранении поля, не раньше.
+    state.draftContent = draft || { name: item.name, description: item.description, history: item.history };
+    state.draftModeAllodId = allodId;
+    renderDetail();
+  }catch(e){ toast('Не удалось открыть черновик: '+e.message); }
+}
+
+async function draftDiscardFlow(allodId){
+  const ok = await confirmDialog({
+    title:'Отклонить черновик?',
+    message:'Все несохранённые в опубликованную версию правки (название/описание/история) будут стёрты без возможности восстановить.',
+    confirmLabel:'Отклонить', danger:true
+  });
+  if(!ok) return;
+  try{
+    await api(`/allods/${allodId}/draft`, { method:'DELETE' });
+    state.draftModeAllodId = null;
+    state.draftContent = null;
+    toast('Черновик отклонён');
+    renderDetail();
+  }catch(e){ toast('Ошибка: '+e.message); }
+}
+
+async function draftPublishFlow(allodId){
+  const ok = await confirmDialog({
+    title:'Опубликовать черновик?',
+    message:'Название/описание/история острова обновятся до черновой версии — увидят все посетители сайта, не только редакторы.',
+    confirmLabel:'Опубликовать'
+  });
+  if(!ok) return;
+  try{
+    const published = await api(`/allods/${allodId}/draft/publish`, { method:'POST' });
+    const item = byId(allodId);
+    if(item){ Object.assign(item, published); }
+    state.draftModeAllodId = null;
+    state.draftContent = null;
+    toast('Черновик опубликован');
+    renderDetail();
+    if(state.view==='wiki') renderWiki();
+  }catch(e){ toast('Ошибка публикации: '+e.message); }
 }

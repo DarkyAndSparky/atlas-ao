@@ -24,6 +24,15 @@ services:
     # в пару секунд, но 15с — с запасом на случай зависших keep-alive соединений
     # (сам server.js всё равно принудительно выходит через 8с, см. gracefulShutdown)
     stop_grace_period: 15s
+    # Дефолтный json-file драйвер Docker без лимита размера — на реальном
+    # проде stdout/stderr контейнера иначе растут неограниченно на диске
+    # хоста годами. max-size — размер одного файла лога, max-file —
+    # сколько таких файлов хранить (ротация, старые удаляются).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     environment:
       # /app/data и не /app — базу и uploads держим отдельно от кода в именованных
       # томах, чтобы `docker compose up --build` (пересборка образа) их не задевал.

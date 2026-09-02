@@ -272,6 +272,23 @@ CREATE TABLE IF NOT EXISTS allod_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_allod_snapshots_allod ON allod_snapshots(allod_id, created_at DESC);
 
+-- Черновики острова — один на остров (не на пользователя), живёт, пока его
+-- явно не опубликуют или не отклонят. Заводится при первом редактировании
+-- "в режиме черновика", сразу полной копией текущих live-значений name/
+-- description/history (не только изменённых полей) — так рендер черновика
+-- становится тривиальным (просто показать draft.*, без слияния с live для
+-- отсутствующих полей). Публикация применяет все три поля к живому острову
+-- той же веткой кода, что и обычный PATCH /allods/:id (снимок в
+-- allod_snapshots + инкремент rev), и удаляет эту строку.
+CREATE TABLE IF NOT EXISTS allod_drafts (
+  allod_id TEXT PRIMARY KEY REFERENCES allods(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  history TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL,
+  updated_by TEXT
+);
+
 -- Обращения гостей ("сообщить об ошибке") — единственная точка на сайте,
 -- где может писать вообще кто угодно без аккаунта. allod_id опционален
 -- (общий отзыв не про конкретный остров тоже возможен). resolved — админ
@@ -467,6 +484,14 @@ if(userCols.length && !userCols.includes('allowed_projects')){
   // public/js/projects.js — чисто фронтенд-константа), заводить под них
   // таблицу ради этого одного поля было бы избыточно.
   db.exec('ALTER TABLE users ADD COLUMN allowed_projects TEXT');
+}
+if(userCols.length && !userCols.includes('disabled')){
+  console.log('Миграция: добавляю колонку disabled (мягкая блокировка аккаунта)...');
+  db.exec('ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
+}
+if(userCols.length && !userCols.includes('last_login_at')){
+  console.log('Миграция: добавляю колонку last_login_at...');
+  db.exec('ALTER TABLE users ADD COLUMN last_login_at INTEGER');
 }
 
 // дефолтный аккаунт admin/<случайный пароль> — защита от дурака: если на

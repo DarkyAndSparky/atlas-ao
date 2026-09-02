@@ -551,9 +551,10 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
   position:absolute;right:20px;top:calc(var(--topbar-h,64px) + 60px);z-index:45;
   display:none;
   flex-direction:column;gap:8px;background:var(--void-1);border:1px solid var(--line);
-  border-radius:6px;padding:8px;
+  border-radius:6px;padding:8px;width:132px;
 }
 #drawToolbar.show{display:flex;}
+.draw-tool-grid{display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;}
 .draw-tool{
   width:36px;height:36px;background:var(--void-0);border:1px solid var(--line);color:var(--parchment);
   font-size:16px;border-radius:3px;cursor:pointer;font-family:var(--ui);
@@ -594,8 +595,12 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
 .annot-icon{pointer-events:auto;}
 
 /* ---------- decoration stamp picker ---------- */
+/* Раньше висела слева (left:66px) — перекрывалась с #tray (лоток
+   неразмещённых островов, тоже слева, на всю высоту), когда лоток открыт.
+   Теперь справа, рядом с #drawToolbar (её же кнопка "icon" и открывает
+   этот пикер — логично держать визуально рядом, не в другом углу экрана). */
 #decoPicker{
-  position:absolute;left:66px;bottom:48px;z-index:45;width:190px;
+  position:absolute;right:162px;top:calc(var(--topbar-h,64px) + 60px);z-index:45;width:190px;
   background:var(--void-1);border:1px solid var(--line);border-radius:6px;padding:10px;
 }
 #decoPicker.hidden{display:none;}
@@ -686,6 +691,24 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
   background:none;border:none;padding:0;cursor:pointer;text-align:left;opacity:0.7;
 }
 .report-issue-btn:hover{color:var(--imperial);opacity:1;text-decoration:underline;}
+.draft-enter-btn{
+  display:inline-block;margin:4px 0 10px;font-family:var(--ui);font-size:11.5px;color:var(--astral);
+  background:none;border:1px solid var(--astral-dim);border-radius:3px;padding:5px 10px;cursor:pointer;
+}
+.draft-enter-btn:hover{background:var(--astral-dim);color:var(--void-0);}
+.draft-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  background:rgba(111,211,217,0.08);border:1px solid var(--astral-dim);border-radius:4px;
+  padding:10px 14px;margin:6px 0 14px;font-family:var(--ui);font-size:12.5px;color:var(--parchment);
+}
+.draft-banner-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.draft-banner-actions button{
+  font-family:var(--ui);font-size:11px;letter-spacing:0.3px;border-radius:3px;padding:6px 12px;cursor:pointer;
+  background:none;border:1px solid var(--line);color:var(--parchment-dim);white-space:nowrap;
+}
+.draft-banner-actions button:hover{border-color:var(--astral);color:var(--astral);}
+.draft-banner-actions .draft-publish-btn{background:var(--gold);border-color:var(--gold);color:var(--void-0);font-weight:600;}
+.draft-banner-actions .draft-publish-btn:hover{background:var(--gold-bright);border-color:var(--gold-bright);}
 .at-autocomplete{
   position:absolute;z-index:50;width:260px;max-height:220px;
   background:var(--void-1);border:1px solid var(--gold);border-radius:4px;
@@ -1149,7 +1172,12 @@ body:has(#timelineSliderBar.show) .map-selection-panel{bottom:76px;}
   border:1px solid rgba(216,90,48,0.35);border-radius:3px;padding:3px 8px;white-space:nowrap;
 }
 .user-date{font-family:var(--ui);font-size:11px;color:var(--parchment-dim);}
-.user-del,.user-reset-pass,.user-scope-btn{font-size:11.5px;padding:6px 12px;white-space:nowrap;}
+.user-del,.user-reset-pass,.user-scope-btn,.user-toggle-disabled{font-size:11.5px;padding:6px 12px;white-space:nowrap;}
+.user-row-disabled{opacity:0.55;border-color:var(--imperial);}
+.user-disabled-tag{
+  font-family:var(--ui);font-size:10px;color:var(--imperial);background:rgba(216,90,48,0.12);
+  border:1px solid rgba(216,90,48,0.35);border-radius:3px;padding:2px 7px;margin-left:6px;white-space:nowrap;
+}
 
 .deco-manage-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(84px,1fr));gap:10px;margin-bottom:10px;}
 .deco-manage-item{

@@ -175,3 +175,90 @@ test('пустое тело запроса не меняет пользоват�
   assert.equal(r.status, 200);
   assert.equal(r.data.role, 'editor');
 });
+
+/* ---------------- мягкая блокировка (disabled) + last_login_at ---------------- */
+
+test('заблокированный пользователь не может войти, даже с верным паролем', async ()=>{
+  const reg = await admin.post('/api/auth/register', { username:'tobedisabled', password:'to-be-disabled-1', role:'editor' });
+  assert.equal(reg.status, 200);
+  const userId = reg.data.user.id;
+
+  const disableRes = await admin.patch(`/api/auth/users/${userId}`, { disabled: true });
+  assert.equal(disableRes.status, 200);
+  assert.equal(disableRes.data.disabled, true);
+
+  const victimClient = makeClient();
+  const loginRes = await victimClient.post('/api/auth/login', { username:'tobedisabled', password:'to-be-disabled-1' });
+  assert.equal(loginRes.status, 403);
+  assert.match(loginRes.data.error, /заблокирован/);
+});
+
+test('блокировка немедленно убивает уже открытую сессию — не ждёт следующего входа', async ()=>{
+  const reg = await admin.post('/api/auth/register', { username:'activesession', password:'active-session-pass1', role:'editor' });
+  const userId = reg.data.user.id;
+
+  const victimClient = makeClient();
+  const loginRes = await victimClient.post('/api/auth/login', { username:'activesession', password:'active-session-pass1' });
+  assert.equal(loginRes.status, 200);
+
+  // сессия активна и рабочая — проверим на безобидном authenticated-эндпоинте
+  const beforeDisable = await victimClient.get('/api/auth/status');
+  assert.equal(beforeDisable.data.loggedIn, true);
+
+  const disableRes = await admin.patch(`/api/auth/users/${userId}`, { disabled: true });
+  assert.equal(disableRes.status, 200);
+
+  // та же cookie, тот же клиент — но сессия уже должна быть мертва
+  const afterDisable = await victimClient.get('/api/auth/status');
+  assert.equal(afterDisable.data.loggedIn, false);
+});
+
+test('разблокировка возвращает доступ к входу', async ()=>{
+  const reg = await admin.post('/api/auth/register', { username:'reenabled', password:'re-enabled-pass1', role:'editor' });
+  const userId = reg.data.user.id;
+
+  await admin.patch(`/api/auth/users/${userId}`, { disabled: true });
+  const enableRes = await admin.patch(`/api/auth/users/${userId}`, { disabled: false });
+  assert.equal(enableRes.status, 200);
+  assert.equal(enableRes.data.disabled, false);
+
+  const victimClient = makeClient();
+  const loginRes = await victimClient.post('/api/auth/login', { username:'reenabled', password:'re-enabled-pass1' });
+  assert.equal(loginRes.status, 200);
+});
+
+test('нельзя заблокировать последнего активного администратора', async ()=>{
+  // Общий файл — к этому моменту могло накопиться больше одного активного
+  // админа из более ранних тестов (например, "смена роли самому себе").
+  // Сводим к ровно одному прямо в этом тесте, а не полагаемся на состояние
+  // снаружи — иначе тест хрупкий к порядку/содержимому соседних тестов.
+  let usersRes = await admin.get('/api/auth/users');
+  let activeAdmins = usersRes.data.filter(u=> u.role==='admin' && !u.disabled);
+  for(const extra of activeAdmins.slice(1)){
+    const r = await admin.patch(`/api/auth/users/${extra.id}`, { disabled: true });
+    assert.equal(r.status, 200, 'блокировка НЕ последнего админа должна проходить');
+  }
+  usersRes = await admin.get('/api/auth/users');
+  activeAdmins = usersRes.data.filter(u=> u.role==='admin' && !u.disabled);
+  assert.equal(activeAdmins.length, 1, 'после зачистки должен остаться ровно один активный администратор');
+
+  const r = await admin.patch(`/api/auth/users/${activeAdmins[0].id}`, { disabled: true });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /последнего активного администратора/);
+});
+
+test('last_login_at — null у ни разу не логинившегося, проставляется после первого входа', async ()=>{
+  const reg = await admin.post('/api/auth/register', { username:'neverloggedin', password:'never-logged-in-1', role:'editor' });
+  const userId = reg.data.user.id;
+
+  const beforeLogin = await admin.get('/api/auth/users');
+  const beforeRec = beforeLogin.data.find(u=>u.id===userId);
+  assert.equal(beforeRec.lastLoginAt, null);
+
+  const victimClient = makeClient();
+  await victimClient.post('/api/auth/login', { username:'neverloggedin', password:'never-logged-in-1' });
+
+  const afterLogin = await admin.get('/api/auth/users');
+  const afterRec = afterLogin.data.find(u=>u.id===userId);
+  assert.ok(afterRec.lastLoginAt !== null && afterRec.lastLoginAt > Date.now() - 10000);
+});

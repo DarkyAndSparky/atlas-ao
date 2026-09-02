@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { getSessionSecret } = require('./config');
 const SqliteSessionStore = require('./sessionStore');
 const { router: authRouter } = require('./routes/auth');
-const allodsRouter = require('./routes/allods');
+const { router: allodsRouter } = require('./routes/allods');
 const backupRouter = require('./routes/backup');
 const settingsRouter = require('./routes/settings');
 const annotationsRouter = require('./routes/annotations');
@@ -19,6 +19,7 @@ const timelineRouter = require('./routes/timeline');
 const archipelagosRouter = require('./routes/archipelagos');
 const searchRouter = require('./routes/search');
 const reportsRouter = require('./routes/reports');
+const draftsRouter = require('./routes/drafts');
 const { router: systemRouter } = require('./routes/system');
 const seoRouter = require('./routes/seo');
 const { UPLOAD_DIR } = require('./upload');
@@ -116,6 +117,7 @@ function createApp(){
   app.use('/api', archipelagosRouter);
   app.use('/api', searchRouter);
   app.use('/api', reportsRouter);
+  app.use('/api', draftsRouter);
   app.use('/api/system', systemRouter);
 
   app.use(seoRouter);

@@ -7,6 +7,8 @@ const state = {
   returnView: 'map', // map или wiki — куда возвращаться из деталей острова (клик по тегу, кнопка "назад")
   currentId: null,
   currentLocId: null,
+  draftModeAllodId: null, // id острова, для которого сейчас открыт режим черновика (name/description/history) — null, если не в режиме черновика
+  draftContent: null,     // {name, description, history} текущего черновика — null, пока draftModeAllodId тоже null
   filters: { category:'', faction:'', q:'', archipelago:'', climate:'', size:'' },
   cam: { x: 0, y: 0, scale: 0.72 }, // реальное центрирование выставляется в main.js после того, как известен размер #mapView
   project: null, // выставляется в main.js после boot() из PROJECTS[0] или localStorage
