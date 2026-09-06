@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, enableEditor, gotoReady } = require('../helpers');
+const { loginViaUI, enableEditor, gotoReady, fillTextPrompt } = require('../helpers');
 
 test.describe('Drag-and-drop в редакторе', ()=>{
 
@@ -29,8 +29,8 @@ test.describe('Drag-and-drop в редакторе', ()=>{
     await page.evaluate(() => openDetail('a040'));
 
     for(const name of ['Локация Один', 'Локация Два']){
-      page.once('dialog', dialog => dialog.accept(name));
       await page.click('#addLocBtn');
+      await fillTextPrompt(page, name);
       await page.waitForTimeout(300);
     }
     await expect(page.locator('.location-block')).toHaveCount(2);

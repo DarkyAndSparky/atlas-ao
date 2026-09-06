@@ -46,9 +46,9 @@ jobs:
         working-directory: e2e
         run: npm ci
 
-      - name: Установка браузера Chromium (с системными зависимостями)
+      - name: Установка браузеров Chromium и WebKit (с системными зависимостями)
         working-directory: e2e
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Запуск UI-тестов
         working-directory: e2e

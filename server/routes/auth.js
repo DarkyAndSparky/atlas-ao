@@ -236,6 +236,13 @@ router.post('/password', requireAuth, async (req, res, next)=>{
     if(!newPassword || newPassword.length < 8){
       return res.status(400).json({ error: 'Новый пароль должен быть не короче 8 символов.' });
     }
+    // roadmap #13: раньше ничего не мешало "сменить" пароль на тот же самый —
+    // проверяем против реального хэша напрямую (а не только сравнением строк
+    // с currentPassword), это работает и в ветке must_change_password, где
+    // currentPassword вообще не передаётся.
+    if(await verifyPassword(newPassword, user.salt, user.hash)){
+      return res.status(400).json({ error: 'Новый пароль должен отличаться от текущего.' });
+    }
     const salt = makeSalt();
     const hash = await hashPassword(newPassword, salt);
     db.prepare('UPDATE users SET salt=?, hash=?, must_change_password=0 WHERE id=?').run(salt, hash, user.id);

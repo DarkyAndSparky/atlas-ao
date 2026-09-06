@@ -522,8 +522,13 @@ if(userCols.length && !userCols.includes('last_login_at')){
     // перепутать при переписывании пароля с экрана вручную. 16 символов —
     // с запасом даже для разового пароля, который всё равно попросят
     // сменить при первом входе.
+    // ATLAS_BOOTSTRAP_PASSWORD — только для e2e/тестового окружения
+    // (задаётся в webServer.env playwright.config.js), чтобы global-setup.js
+    // мог логиниться детерминированным паролем вместо чтения сгенерированного
+    // из консоли/файла. В проде эту переменную никто не ставит — там
+    // остаётся обычная генерация случайного пароля ниже.
     const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    const password = Array.from(crypto.randomBytes(16))
+    const password = process.env.ATLAS_BOOTSTRAP_PASSWORD || Array.from(crypto.randomBytes(16))
       .map(b => ALPHABET[b % ALPHABET.length])
       .join('');
     const salt = crypto.randomBytes(16).toString('hex');

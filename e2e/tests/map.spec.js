@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { gotoReady, loginAndEnableEditor } = require('../helpers');
+const { gotoReady, loginAndEnableEditor, fillTextPrompt } = require('../helpers');
 
 test.describe('Глобальная карта', ()=>{
 
@@ -130,8 +130,8 @@ test.describe('Уничтоженные острова', ()=>{
     await marker.click();
     await expect(page.locator('#detailView')).toHaveClass(/show/);
 
-    page.once('dialog', d => d.accept('1200'));
     await page.locator('.sidebar-fact[data-field="year_disappeared"]').click();
+    await fillTextPrompt(page, '1200');
     await expect(page.locator('.destroyed-banner')).toContainText('1200');
 
     await page.click('[data-view="map"]');

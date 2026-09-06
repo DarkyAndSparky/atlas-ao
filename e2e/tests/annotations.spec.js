@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { gotoReady, loginAndEnableEditor, useIsolatedDrawingProject } = require('../helpers');
+const { gotoReady, loginAndEnableEditor, openDrawPanel, useIsolatedDrawingProject, fillTextPrompt, confirmModalAccept } = require('../helpers');
 
 test.describe('Векторный слой рисования на карте', ()=>{
 
@@ -11,17 +11,19 @@ test.describe('Векторный слой рисования на карте', 
   test('в режиме редактора панель инструментов появляется', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await expect(page.locator('#drawToolbar')).toBeVisible();
   });
 
   test('текстовая подпись: создаётся как SVG-текст и остаётся после перезагрузки страницы', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     const project = await useIsolatedDrawingProject(page);
 
-    page.once('dialog', dialog => dialog.accept('E2E Подпись На Карте'));
     await page.click('.draw-tool[data-tool="text"]');
     await page.click('#mapCanvas', { position: { x: 400, y: 300 } });
+    await fillTextPrompt(page, 'E2E Подпись На Карте');
 
     const text = page.locator('#annotLayer text', { hasText: 'E2E Подпись На Карте' });
     await expect(text).toHaveCount(1);
@@ -38,6 +40,7 @@ test.describe('Векторный слой рисования на карте', 
   test('линия рисуется перетаскиванием и сохраняется на сервере', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
 
     await page.click('.draw-tool[data-tool="line"]');
@@ -56,6 +59,7 @@ test.describe('Векторный слой рисования на карте', 
   test('слишком короткое перетаскивание (случайный клик) не создаёт линию', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
 
     await page.click('.draw-tool[data-tool="line"]');
@@ -79,6 +83,7 @@ test.describe('Векторный слой рисования на карте', 
     // того, чтобы указывать на неё (см. annotations.js, arrowHeadPoints).
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
 
     await page.click('.draw-tool[data-tool="arrow"]');
@@ -128,6 +133,7 @@ test.describe('Векторный слой рисования на карте', 
   test('прямоугольник и круг рисуются перетаскиванием', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
     const canvas = page.locator('#mapCanvas');
     const box = await canvas.boundingBox();
@@ -152,17 +158,18 @@ test.describe('Векторный слой рисования на карте', 
   test('инструмент "стереть" удаляет пометку по клику', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
 
-    page.once('dialog', dialog => dialog.accept('E2E Подпись На Удаление'));
     await page.click('.draw-tool[data-tool="text"]');
     await page.click('#mapCanvas', { position: { x: 500, y: 400 } });
+    await fillTextPrompt(page, 'E2E Подпись На Удаление');
     const target = page.locator('#annotLayer text', { hasText: 'E2E Подпись На Удаление' });
     await expect(target).toHaveCount(1);
 
     await page.click('.draw-tool[data-tool="erase"]');
-    page.once('dialog', dialog => dialog.accept());
     await target.click();
+    await confirmModalAccept(page);
 
     await expect(page.locator('#annotLayer text', { hasText: 'E2E Подпись На Удаление' })).toHaveCount(0);
   });
@@ -170,6 +177,7 @@ test.describe('Векторный слой рисования на карте', 
   test('повторный клик по тому же инструменту выключает его', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     const tool = page.locator('.draw-tool[data-tool="rect"]');
     await tool.click();
     await expect(tool).toHaveClass(/active/);
@@ -180,6 +188,7 @@ test.describe('Векторный слой рисования на карте', 
   test('выход из режима редактора выключает активный инструмент рисования', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await page.click('.draw-tool[data-tool="rect"]');
     await expect(page.locator('.draw-tool[data-tool="rect"]')).toHaveClass(/active/);
 
@@ -191,6 +200,7 @@ test.describe('Векторный слой рисования на карте', 
   test('инструмент "украшение": открывается пикер со стартовым набором картинок', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await expect(page.locator('#decoPicker')).toHaveClass(/hidden/);
 
     await page.click('.draw-tool[data-tool="icon"]');
@@ -201,6 +211,7 @@ test.describe('Векторный слой рисования на карте', 
   test('размещение украшения на карте кликом после выбора картинки', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
 
     await page.click('.draw-tool[data-tool="icon"]');
@@ -216,6 +227,7 @@ test.describe('Векторный слой рисования на карте', 
   test('без выбранной картинки клик по карте инструментом "украшение" ничего не создаёт', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
 
     await page.click('.draw-tool[data-tool="icon"]');
@@ -229,6 +241,7 @@ test.describe('Векторный слой рисования на карте', 
   test('инструмент "стереть" удаляет и размещённое украшение', async ({ page })=>{
     await gotoReady(page);
     await loginAndEnableEditor(page);
+    await openDrawPanel(page);
     await useIsolatedDrawingProject(page);
 
     await page.click('.draw-tool[data-tool="icon"]');
@@ -237,8 +250,8 @@ test.describe('Векторный слой рисования на карте', 
     await expect(page.locator('#annotLayer image.annot-icon')).toHaveCount(1, { timeout: 5000 });
 
     await page.click('.draw-tool[data-tool="erase"]');
-    page.once('dialog', dialog => dialog.accept());
     await page.locator('#annotLayer image.annot-icon').click();
+    await confirmModalAccept(page);
 
     await expect(page.locator('#annotLayer image.annot-icon')).toHaveCount(0);
   });

@@ -13,6 +13,15 @@
 const MAX_ATTEMPTS = 5;
 const LOCK_MS = 5 * 60 * 1000; // 5 минут
 
+// ATLAS_DISABLE_RATE_LIMIT — только для e2e (см. playwright.config.js):
+// сьют специально гоняет много "неверный пароль" тестов подряд с одного и
+// того же IP (localhost), а лимитер общий на весь процесс сервера, не
+// сбрасывается между тестами — 5 неудачных попыток суммарно по всему
+// прогону блокируют IP на 5 минут, и все ПОСЛЕДУЮЩИЕ (уже правильные)
+// логины в других тестах тоже перестают проходить. В проде эта
+// переменная не ставится — блокировка работает как обычно.
+const DISABLED = process.env.ATLAS_DISABLE_RATE_LIMIT === '1';
+
 const attemptsByIp = new Map();     // ip -> { count, lockedUntil }
 const attemptsByTarget = new Map(); // нормализованный логин -> { count, lockedUntil }
 
@@ -46,6 +55,7 @@ function registerFailureOne(map, key){
 // запроса распарсено) проверяют/учитывают только IP-ключ, как и раньше;
 // login-роут передаёт его, как только username становится известен.
 function checkLocked(req, username){
+  if(DISABLED) return { locked: false };
   const byIp = checkOne(attemptsByIp, ipKeyFor(req));
   if(byIp.locked) return byIp;
   if(username){
@@ -56,6 +66,7 @@ function checkLocked(req, username){
 }
 
 function registerFailure(req, username){
+  if(DISABLED) return;
   registerFailureOne(attemptsByIp, ipKeyFor(req));
   if(username) registerFailureOne(attemptsByTarget, targetKeyFor(username));
 }

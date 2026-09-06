@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, enableEditor, gotoReady } = require('../helpers');
+const { loginViaUI, enableEditor, gotoReady, fillTextPrompt, confirmModalAccept } = require('../helpers');
 
 test.describe('Создание и удаление острова', ()=>{
 
@@ -17,8 +17,8 @@ test.describe('Создание и удаление острова', ()=>{
 
     const before = await page.evaluate(() => state.data.length);
 
-    page.once('dialog', dialog => dialog.accept('E2E Новый остров'));
     await page.click('#addAllodBtn');
+    await fillTextPrompt(page, 'E2E Новый остров');
     await page.waitForTimeout(500);
 
     // после создания сразу открывается страница нового острова
@@ -42,8 +42,8 @@ test.describe('Создание и удаление острова', ()=>{
     await loginViaUI(page);
     await enableEditor(page);
 
-    page.once('dialog', dialog => dialog.accept('E2E Остров В Лотке'));
     await page.click('#addAllodBtn');
+    await fillTextPrompt(page, 'E2E Остров В Лотке');
     await page.waitForTimeout(500);
 
     await page.evaluate(() => showMap());
@@ -56,15 +56,15 @@ test.describe('Создание и удаление острова', ()=>{
     await loginViaUI(page);
     await enableEditor(page);
 
-    page.once('dialog', dialog => dialog.accept('E2E Остров На Удаление'));
     await page.click('#addAllodBtn');
+    await fillTextPrompt(page, 'E2E Остров На Удаление');
     await page.waitForTimeout(500);
 
     const id = await page.evaluate(() => state.currentId);
     expect(id).toBeTruthy();
 
-    page.once('dialog', dialog => dialog.accept()); // подтверждение удаления
     await page.click('#delAllodBtn');
+    await confirmModalAccept(page); // подтверждение удаления
     await page.waitForTimeout(500);
 
     // вернулись на карту
@@ -83,12 +83,12 @@ test.describe('Создание и удаление острова', ()=>{
     await loginViaUI(page);
     await enableEditor(page);
 
-    page.once('dialog', dialog => dialog.accept('E2E Остров Исчезнет Из Лотка'));
     await page.click('#addAllodBtn');
+    await fillTextPrompt(page, 'E2E Остров Исчезнет Из Лотка');
     await page.waitForTimeout(500);
 
-    page.once('dialog', dialog => dialog.accept());
     await page.click('#delAllodBtn');
+    await confirmModalAccept(page);
     await page.waitForTimeout(500);
 
     await expect(page.locator('#trayList')).not.toContainText('E2E Остров Исчезнет Из Лотка');

@@ -1,6 +1,21 @@
 @echo off
 setlocal
 chcp 65001 >nul 2>&1
+cd /d "%~dp0"
+
+if not exist server\node_modules (
+  echo Зависимости server не установлены. Устанавливаю...
+  pushd server
+  call npm install
+  if errorlevel 1 (
+    echo Установка зависимостей server не удалась.
+    popd
+    pause
+    exit /b 1
+  )
+  popd
+)
+
 cd /d "%~dp0e2e"
 
 if not exist node_modules (

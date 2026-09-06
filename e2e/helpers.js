@@ -16,9 +16,87 @@ async function enableEditor(page){
   await page.waitForSelector('#editorToggle.on');
 }
 
+// Раньше подтверждения/ввод текста шли через нативные window.confirm()/
+// prompt(), и тесты ловили их через page.once('dialog', ...). Теперь это
+// два переиспользуемых модальных компонента (confirmDialog/textPrompt в
+// picker.js) — визуально в едином стиле сайта, но НЕ нативные диалоги
+// браузера. page.once('dialog', ...) на них никогда не сработает: модалка
+// просто виснет открытой (<div class="modal-overlay show">…) и перехватывает
+// все последующие клики. Используем эти хелперы вместо page.once('dialog').
+async function confirmModalAccept(page){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  await overlay.locator('.field-save').click();
+}
+async function confirmModalCancel(page){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  await overlay.locator('.field-cancel').click();
+}
+async function fillTextPrompt(page, value){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  const input = overlay.locator('.tp-input:visible, .tp-textarea:visible').first();
+  await input.fill(value);
+  await overlay.locator('.field-save').click();
+}
+async function cancelTextPrompt(page){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  await overlay.locator('.field-cancel').click();
+}
+// pickFromList — поисковый пикер (picker.js): печатаем в .modal-search,
+// кликаем по совпавшему пункту .picker-item, содержащему нужный текст.
+async function pickFromListByText(page, text){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  await overlay.locator('.modal-search').fill(text);
+  await overlay.locator('.picker-item', { hasText: text }).first().click();
+}
+// Для pickFromList({ allowCreate:true }) (editTagField и т.п.): вписываем
+// значение, которого нет в списке, и жмём Enter — по renderPickerList()
+// в picker.js это создаёт активную строку type:'create' и подтверждает её.
+async function pickFromListCreate(page, text){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  await overlay.locator('.modal-search').fill(text);
+  await overlay.locator('.modal-search').press('Enter');
+}
+async function fillSourceForm(page, { title, url, note }){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  if(title != null) await overlay.locator('.sf-title').fill(title);
+  if(url != null) await overlay.locator('.sf-url').fill(url);
+  if(note != null) await overlay.locator('.sf-note').fill(note);
+  await overlay.locator('.field-save').click();
+}
+// Форма события хронологии (title+year+description в одном модальном окне,
+// см. ensureEventFormDom в timelineView.js) — тоже замена старой цепочки из
+// нескольких window.prompt().
+async function fillEventForm(page, { title, year, description }){
+  const overlay = page.locator('.modal-overlay.show');
+  await overlay.waitFor({ state: 'visible' });
+  await overlay.locator('.ef-title').fill(title);
+  await overlay.locator('.ef-year').fill(String(year));
+  if(description != null) await overlay.locator('.ef-desc').fill(description);
+  await overlay.locator('.field-save').click();
+}
+
 async function loginAndEnableEditor(page){
   await loginViaUI(page);
   await enableEditor(page);
+}
+
+// Панель рисования — отдельный тоггл поверх режима редактора
+// (см. updateDrawToolbarVisibility() в mapView.js: toolbar.show зависит от
+// onMapInEditor && state.drawPanelOpen, а не только от editorOn). Открыть
+// редактор недостаточно, чтобы кнопки .draw-tool стали видимы/кликабельны —
+// нужно ещё явно нажать #drawToggleBtn.
+async function openDrawPanel(page){
+  const toolbar = page.locator('#drawToolbar');
+  const isOpen = await toolbar.evaluate(el => el.classList.contains('show'));
+  if(!isOpen) await page.click('#drawToggleBtn');
+  await toolbar.waitFor({ state: 'visible' });
 }
 
 async function gotoReady(page, path='/'){
@@ -49,4 +127,4 @@ async function openConfig(page){
   await page.locator('.config-card').first().waitFor({ state: 'visible' });
 }
 
-module.exports = { loginViaUI, enableEditor, loginAndEnableEditor, gotoReady, useIsolatedDrawingProject, openConfig, TEST_USERNAME, TEST_PASSWORD };
+module.exports = { loginViaUI, enableEditor, loginAndEnableEditor, openDrawPanel, gotoReady, useIsolatedDrawingProject, openConfig, confirmModalAccept, confirmModalCancel, fillTextPrompt, cancelTextPrompt, fillEventForm, pickFromListByText, pickFromListCreate, fillSourceForm, TEST_USERNAME, TEST_PASSWORD };

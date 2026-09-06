@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { gotoReady, loginAndEnableEditor } = require('../helpers');
+const { gotoReady, loginAndEnableEditor, fillTextPrompt, confirmModalAccept } = require('../helpers');
 
 test.describe('Архипелаги', ()=>{
 
@@ -11,8 +11,8 @@ test.describe('Архипелаги', ()=>{
     const row = page.locator('.wiki-island-row').first();
     const islandName = (await row.locator('.wiki-island-link').textContent()).replace('●','').trim();
 
-    page.once('dialog', d => d.accept('Новый архипелаг из Атласа'));
     await row.locator('[data-action="add-to-archipelago"]').click();
+    await fillTextPrompt(page, 'Новый архипелаг из Атласа');
 
     await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
 
@@ -38,8 +38,8 @@ test.describe('Архипелаги', ()=>{
     await expect(markers.nth(0)).toHaveClass(/selected/);
     await expect(markers.nth(1)).toHaveClass(/selected/);
 
-    page.once('dialog', d => d.accept('Собранный через ctrl+клик архипелаг'));
     await page.click('#mapSelectionAssignBtn');
+    await fillTextPrompt(page, 'Собранный через ctrl+клик архипелаг');
 
     // панель выделения должна закрыться после успешной привязки
     await expect(page.locator('#mapSelectionPanel')).toHaveCount(0);
@@ -78,8 +78,8 @@ test.describe('Архипелаги', ()=>{
     const select = page.locator('#archipelagoSelect');
     await expect(select).toBeVisible();
 
-    page.once('dialog', d => d.accept('Архипелаг из пикера острова'));
     await select.selectOption('__new__');
+    await fillTextPrompt(page, 'Архипелаг из пикера острова');
     await expect(select).not.toHaveValue('__new__');
 
     // открепление — выбрать "— Нет —"
@@ -95,8 +95,8 @@ test.describe('Архипелаги', ()=>{
     await page.click('[data-view="wiki"]');
     await page.locator('.wiki-island-link').first().click();
 
-    page.once('dialog', d => d.accept('Архипелаг на удаление'));
     await page.locator('#archipelagoSelect').selectOption('__new__');
+    await fillTextPrompt(page, 'Архипелаг на удаление');
 
     await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
 
@@ -104,8 +104,8 @@ test.describe('Архипелаги', ()=>{
     const card = page.locator('.source-card', { hasText: 'Архипелаг на удаление' });
     await expect(card).toBeVisible();
 
-    page.once('dialog', d => d.accept());
     await card.locator('[data-action="delete-archipelago"]').click();
+    await confirmModalAccept(page);
     await expect(page.locator('.source-card', { hasText: 'Архипелаг на удаление' })).toHaveCount(0);
   });
 

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
-cd "$(dirname "$0")/e2e"
+cd "$(dirname "$0")"
+if [ ! -d server/node_modules ]; then
+  echo "Зависимости server не установлены. Устанавливаю..."
+  (cd server && npm install)
+fi
+cd e2e
 if [ ! -d node_modules ]; then
   echo "Зависимости e2e не установлены. Устанавливаю..."
   npm install

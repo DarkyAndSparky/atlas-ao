@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, enableEditor, gotoReady } = require('../helpers');
+const { loginViaUI, enableEditor, gotoReady, fillTextPrompt, confirmModalAccept, confirmModalCancel, pickFromListCreate } = require('../helpers');
 
 test.describe('Страница острова', ()=>{
 
@@ -26,7 +26,11 @@ test.describe('Страница острова', ()=>{
     const desc = page.locator('[data-field="description"]');
     await desc.click();
     await desc.fill('E2E тестовое описание острова');
-    await page.locator('[data-field="history"]').click(); // blur через клик на другое поле
+    // сохранение теперь явное — по кнопке "Сохранить" рядом с полем, а не
+    // по потере фокуса (см. комментарий к wireEditableField в detailView.js:
+    // раньше было неявное автосохранение по blur, но защита от случайной
+    // потери фокуса/пустого сохранения заменила его на явные Save/Cancel).
+    await page.click('[data-for="description"] .field-save');
     await page.waitForTimeout(400);
 
     await expect(page.locator('#toast')).toHaveClass(/show/);
@@ -49,7 +53,7 @@ test.describe('Страница острова', ()=>{
     const desc = page.locator('[data-field="description"]');
     await desc.click();
     await desc.fill('Текст, который должен быть отменён');
-    await page.locator('[data-field="history"]').click();
+    await page.click('[data-for="description"] .field-save');
     await page.waitForTimeout(400);
 
     await page.click('#toastUndo');
@@ -68,14 +72,14 @@ test.describe('Страница острова', ()=>{
     await enableEditor(page);
     await page.evaluate(() => openDetail('a023'));
 
-    page.once('dialog', dialog => dialog.accept('E2E Локация'));
     await page.click('#addLocBtn');
+    await fillTextPrompt(page, 'E2E Локация');
     await page.waitForTimeout(400);
     await expect(page.locator('.location-block')).toHaveCount(1);
     await expect(page.locator('.loc-name')).toContainText('E2E Локация');
 
-    page.once('dialog', dialog => dialog.accept());
     await page.click('.location-block .del');
+    await confirmModalAccept(page);
     await page.waitForTimeout(400);
     await expect(page.locator('.location-block')).toHaveCount(0);
   });
@@ -86,11 +90,9 @@ test.describe('Страница острова', ()=>{
     await enableEditor(page);
     await page.evaluate(() => openDetail('a024'));
 
-    page.once('dialog', dialog => {
-      dialog.dismiss(); // "файл или ссылка" -> Отмена = вставить ссылку
-      page.once('dialog', dialog2 => dialog2.accept('https://picsum.photos/seed/e2e/400/300'));
-    });
     await page.click('.gallery-add');
+    await confirmModalCancel(page); // "файл или ссылка" -> Отмена = вставить ссылку
+    await fillTextPrompt(page, 'https://picsum.photos/seed/e2e/400/300');
     await page.waitForTimeout(500);
     await expect(page.locator('#galleryWrap .gallery-item')).toHaveCount(1);
 
@@ -115,9 +117,11 @@ test.describe('Страница острова', ()=>{
     await enableEditor(page);
     await page.evaluate(() => openDetail('a025'));
 
-    // вписываем совершенно новое значение категории через prompt()
-    page.once('dialog', dialog => dialog.accept('Испытательный полигон E2E'));
+    // вписываем совершенно новое значение категории через кастомный
+    // поисковый пикер (editTagField -> pickFromList({allowCreate:true}) в
+    // detailView.js), а не через нативный prompt()
     await page.click('[data-action="edit-tag"][data-field="category"]');
+    await pickFromListCreate(page, 'Испытательный полигон E2E');
     await page.waitForTimeout(400);
 
     await expect(page.locator('.tag[data-action="edit-tag"][data-field="category"]')).toContainText('Испытательный полигон E2E');

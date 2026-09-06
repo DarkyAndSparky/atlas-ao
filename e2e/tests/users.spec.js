@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, TEST_USERNAME, TEST_PASSWORD, gotoReady } = require('../helpers');
+const { loginViaUI, TEST_USERNAME, TEST_PASSWORD, gotoReady, confirmModalAccept } = require('../helpers');
 
 test.describe('Управление редакторами (панель настроек)', ()=>{
 
@@ -50,8 +50,8 @@ test.describe('Управление редакторами (панель нас�
     await page.waitForTimeout(500);
     await expect(page.locator('.user-row').filter({ hasText: 'e2e-to-remove' })).toHaveCount(1);
 
-    page.once('dialog', dialog => dialog.accept());
     await page.locator('.user-row', { hasText: 'e2e-to-remove' }).locator('.user-del').click();
+    await confirmModalAccept(page);
     await page.waitForTimeout(500);
 
     await expect(page.locator('.user-row').filter({ hasText: 'e2e-to-remove' })).toHaveCount(0);

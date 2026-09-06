@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { gotoReady, loginAndEnableEditor } = require('../helpers');
+const { gotoReady, loginAndEnableEditor, fillTextPrompt } = require('../helpers');
 
 test.describe('Слайдер динамики островов', ()=>{
 
@@ -19,10 +19,10 @@ test.describe('Слайдер динамики островов', ()=>{
     await marker.click();
     await expect(page.locator('#detailView')).toHaveClass(/show/);
 
-    page.once('dialog', d => d.accept('500'));
     await page.locator('.sidebar-fact[data-field="year_appeared"]').click();
-    page.once('dialog', d => d.accept('600'));
+    await fillTextPrompt(page, '500');
     await page.locator('.sidebar-fact[data-field="year_disappeared"]').click();
+    await fillTextPrompt(page, '600');
 
     await page.click('[data-view="map"]');
     await expect(page.locator('#timelineSliderBar')).toHaveClass(/show/);

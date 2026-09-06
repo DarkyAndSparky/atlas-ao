@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { gotoReady, loginAndEnableEditor } = require('../helpers');
+const { gotoReady, loginAndEnableEditor, fillEventForm, confirmModalAccept } = require('../helpers');
 
 test.describe('Хронология', ()=>{
 
@@ -10,10 +10,8 @@ test.describe('Хронология', ()=>{
     await page.click('[data-view="timeline"]');
     await expect(page.locator('#timelineView')).toHaveClass(/show/);
 
-    let step = 0;
-    const answers = ['Основание Империи', '10', 'Первое событие мировой хронологии'];
-    page.on('dialog', d => d.accept(answers[step++]));
     await page.click('#addWorldEventBtn');
+    await fillEventForm(page, { title: 'Основание Империи', year: 10, description: 'Первое событие мировой хронологии' });
 
     await expect(page.locator('.timeline-event-title', { hasText: 'Основание Империи' })).toBeVisible();
     await expect(page.locator('.timeline-year', { hasText: '10' })).toBeVisible();
@@ -24,15 +22,13 @@ test.describe('Хронология', ()=>{
     await loginAndEnableEditor(page);
     await page.click('#wikiDropdownBtn'); // 4 раздела вики теперь в выпадающем меню (см. UX-аудит)
     await page.click('[data-view="timeline"]');
-    let step = 0;
-    let answers = ['Позднее событие', '900', ''];
-    page.on('dialog', d => d.accept(answers[step++]));
+
     await page.click('#addWorldEventBtn');
+    await fillEventForm(page, { title: 'Позднее событие', year: 900 });
     await expect(page.locator('.timeline-event-title', { hasText: 'Позднее событие' })).toBeVisible();
 
-    step = 0;
-    answers = ['Раннее событие', '1', ''];
     await page.click('#addWorldEventBtn');
+    await fillEventForm(page, { title: 'Раннее событие', year: 1 });
     await expect(page.locator('.timeline-event-title', { hasText: 'Раннее событие' })).toBeVisible();
 
     const years = await page.locator('.timeline-year').allTextContents();
@@ -49,19 +45,14 @@ test.describe('Хронология', ()=>{
     await page.locator('.wiki-island-link').first().click();
     await expect(page.locator('#detailView')).toHaveClass(/show/);
 
-    let step = 0;
-    const answers = ['Основание острова', '5', 'первое поселение'];
-    page.on('dialog', d => d.accept(answers[step++]));
     await page.locator('#timelineSection .add-source-btn').scrollIntoViewIfNeeded();
     await page.locator('#timelineSection .add-source-btn').click();
+    await fillEventForm(page, { title: 'Основание острова', year: 5, description: 'первое поселение' });
 
     await expect(page.locator('#timelineSection .timeline-event-title', { hasText: 'Основание острова' })).toBeVisible();
 
     await page.locator('#timelineSection [data-action="delete-event"]').click();
-    // confirm() для удаления обрабатывается тем же общим 'dialog' — но там
-    // ответов в очереди уже не осталось, page.on всегда возвращает accept('')
-    // на любой следующий диалог (см. handler выше — он безусловно accept'ит),
-    // так что удаление тоже подтвердится
+    await confirmModalAccept(page);
     await expect(page.locator('#timelineSection .timeline-event')).toHaveCount(0);
   });
 

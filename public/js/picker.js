@@ -59,12 +59,17 @@ function closePicker(value){
 
 function renderPickerList(){
   const opts = pickerOverlay._opts || {};
-  const q = pickerInput.value.trim().toLowerCase();
+  const raw = pickerInput.value.trim();
+  const q = raw.toLowerCase();
   const matches = opts.items.filter(v=> v.toLowerCase().includes(q));
   const rows = matches.map(v=> ({ type:'existing', value:v }));
   const exactExists = opts.items.some(v=> v.toLowerCase()===q);
   if(opts.allowCreate && q && !exactExists){
-    rows.push({ type:'create', value:q });
+    // поиск/сравнение — без учёта регистра (q), но создаваемое значение
+    // должно сохранять регистр так, как ввёл пользователь (raw), иначе
+    // любая новая категория/фракция и т.п. молча приводится к нижнему
+    // регистру (реальный баг, не тестовый — см. roadmap).
+    rows.push({ type:'create', value:raw });
   }
   if(opts.passEmpty && !q){
     rows.unshift({ type:'clear', value:'' });

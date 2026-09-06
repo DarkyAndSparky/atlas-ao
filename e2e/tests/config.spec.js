@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, gotoReady, openConfig } = require('../helpers');
+const { loginViaUI, gotoReady, openConfig, confirmModalAccept } = require('../helpers');
 
 test.describe('Панель конфига (админ)', ()=>{
 
@@ -171,8 +171,8 @@ test.describe('Панель конфига (админ)', ()=>{
     await page.waitForTimeout(500);
     await expect(page.locator('.deco-manage-item', { hasText: 'E2E Удалю Меня' })).toHaveCount(1);
 
-    page.once('dialog', dialog => dialog.accept());
     await page.locator('.deco-manage-item', { hasText: 'E2E Удалю Меня' }).locator('.deco-del').click();
+    await confirmModalAccept(page);
     await page.waitForTimeout(500);
 
     await expect(page.locator('.deco-manage-item', { hasText: 'E2E Удалю Меня' })).toHaveCount(0);
@@ -221,8 +221,8 @@ test.describe('Панель конфига (админ)', ()=>{
 
     await expect(page.locator('.faction-manage-item').first()).toBeVisible();
     const before = await page.locator('.faction-manage-item').count();
-    page.once('dialog', dialog => dialog.accept());
     await page.locator('.faction-del').first().click();
+    await confirmModalAccept(page);
 
     await expect(page.locator('.faction-manage-item')).toHaveCount(before - 1);
   });
@@ -245,8 +245,8 @@ test.describe('Управление пользователями (расшире
     const select = row.locator('.user-role-select');
     await expect(select).toHaveValue('editor');
 
-    page.once('dialog', d => d.accept());
     await select.selectOption('admin');
+    await confirmModalAccept(page);
     await expect(select).toHaveValue('admin');
   });
 
@@ -266,8 +266,8 @@ test.describe('Управление пользователями (расшире
     });
     test.skip(adminsCount > 1, 'нужен ровно один администратор для этого сценария');
 
-    page.once('dialog', d => d.accept());
     await select.selectOption('editor');
+    await confirmModalAccept(page);
     await expect(select).toHaveValue('admin'); // откатилось обратно после ошибки с сервера
   });
 
@@ -282,8 +282,8 @@ test.describe('Управление пользователями (расшире
     const row = page.locator('.user-row', { hasText: 'admin' }).first();
     await expect(row.locator('.user-reset-pending')).toHaveCount(0);
 
-    page.once('dialog', d => d.accept());
     await row.locator('.user-reset-pass').click();
+    await confirmModalAccept(page);
 
     await expect(row.locator('.user-reset-pending')).toBeVisible();
   });

@@ -78,9 +78,14 @@ function createApp(){
     cookie: {
       httpOnly: true,
       sameSite: 'lax',
-      // secure-куки требуют HTTPS — при нативном HTTPS (ATLAS_HTTPS=1, см. certs.js) это true;
-      // при обычном локальном http://localhost оставляем false, иначе логин не заработает.
-      secure: process.env.ATLAS_HTTPS === '1',
+      // secure-куки раньше требовали явного ATLAS_HTTPS=1, и забытый флаг на
+      // проде тихо гонял сессионную куку по обычному HTTP (см. roadmap #9).
+      // Теперь secure=true по умолчанию; ATLAS_ALLOW_HTTP=1 — явный опт-аут
+      // только для локальной разработки/e2e-тестов без HTTPS (иначе браузер
+      // не станет отправлять куку обратно и логин не заработает). Все
+      // штатные способы запуска (start.sh/.bat, оба docker-compose) уже
+      // ставят ATLAS_HTTPS=1 и это никак не задевают.
+      secure: process.env.ATLAS_ALLOW_HTTP === '1' ? false : true,
       maxAge: 1000*60*60*24*30,
     },
   }));

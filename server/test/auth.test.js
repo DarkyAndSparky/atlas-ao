@@ -254,9 +254,14 @@ test('second-editor проходит обязательную форс-смен�
   const c = makeClient();
   await c.post('/api/auth/login', { username: 'second-editor', password: 'anotherpassword1' });
   assert.equal((await c.get('/api/auth/status')).data.mustChangePassword, true);
-  const r = await c.post('/api/auth/password', { newPassword: 'anotherpassword1' }); // тот же пароль — просто снимаем флаг
-  assert.equal(r.status, 200);
+  // сервер больше не разрешает "менять" пароль на тот же самый (см. roadmap
+  // #13) — снимаем флаг временным паролем и сразу возвращаем обратно, чтобы
+  // не задеть 'anotherpassword1', на который рассчитывают тесты ниже.
+  const toTemp = await c.post('/api/auth/password', { newPassword: 'temp-password-flag-clear1' });
+  assert.equal(toTemp.status, 200);
   assert.equal((await c.get('/api/auth/status')).data.mustChangePassword, false);
+  const back = await c.post('/api/auth/password', { currentPassword: 'temp-password-flag-clear1', newPassword: 'anotherpassword1' });
+  assert.equal(back.status, 200);
 });
 
 test('смена собственного пароля: неверный текущий пароль -> 401', async ()=>{
