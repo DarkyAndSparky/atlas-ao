@@ -362,7 +362,7 @@ docker compose up -d --build
 ./test.sh          # оба набора подряд (test.bat на Windows)
 ```
 
-- **Бэкенд** (`node:test`, 256 тестов, каждый файл — своя изолированная
+- **Бэкенд** (`node:test`, 261 тест, каждый файл — своя изолированная
   временная БД):
   ```bash
   ./test-backend.sh   # или test-backend.bat

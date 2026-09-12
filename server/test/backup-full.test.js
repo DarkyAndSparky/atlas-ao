@@ -20,6 +20,7 @@ process.env.ATLAS_DB_PATH = DB_PATH;
 process.env.ATLAS_UPLOAD_DIR = UPLOAD_DIR;
 process.env.ATLAS_BACKUPS_DIR = path.join(TEST_DIR, 'backups');
 process.env.SESSION_SECRET = 'test-secret-not-for-production';
+process.env.ATLAS_ALLOW_HTTP = '1'; // secure-куки по умолчанию (roadmap #9) ломают set-cookie на обычном HTTP, каким тут гоняют тесты
 process.env.ATLAS_TEST_NO_EXIT = '1';
 
 const { createApp } = require('../app');

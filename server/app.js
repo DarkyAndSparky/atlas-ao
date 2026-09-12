@@ -92,6 +92,36 @@ function createApp(){
 
   app.get('/api/health', (req, res)=> res.json({ ok: true }));
 
+  // CSRF-защита (roadmap #7): куки сессии уже sameSite:'lax' — это блокирует
+  // большинство межсайтовых POST/PATCH/DELETE в современных браузерах, но не
+  // все (старые браузеры без поддержки SameSite, поддомены и т.п.). Второй,
+  // независимый слой — сверяем Origin (а если браузер его не прислал, что
+  // бывает для no-cors form-submit — Referer) с собственным хостом сервера
+  // на любой запрос, меняющий состояние. GET/HEAD/OPTIONS не трогаем — они
+  // не должны иметь побочных эффектов и их же запрашивают сторонние превью-
+  // боты без Origin/Referer вовсе.
+  function csrfOriginCheck(req, res, next){
+    if(['GET','HEAD','OPTIONS'].includes(req.method)) return next();
+    const origin = req.get('origin');
+    const referer = req.get('referer');
+    const host = req.get('host');
+    if(!host) return res.status(400).json({ error: 'Некорректный запрос.' });
+    let sourceHost = null;
+    try{
+      if(origin) sourceHost = new URL(origin).host;
+      else if(referer) sourceHost = new URL(referer).host;
+    }catch(e){ /* невалидный Origin/Referer — sourceHost остаётся null, упадёт ниже */ }
+    // ни Origin, ни Referer не пришли вовсе (не браузерный запрос — curl, серверный
+    // клиент и т.п.) — не блокируем: CSRF в принципе возможен только из браузера
+    // жертвы, у которого один из этих заголовков всегда есть на fetch/form-submit.
+    if(!origin && !referer) return next();
+    if(sourceHost !== host){
+      return res.status(403).json({ error: 'Запрос с другого источника отклонён.' });
+    }
+    next();
+  }
+  app.use('/api', csrfOriginCheck);
+
   // Общий rate limit на API — защита от примитивного скрапинга/DoS, не мешает
   // обычному использованию сайта. Логин защищён отдельно, гораздо строже
   // (security/rateLimiter.js, по попыткам, а не по времени) — этот лимитер его

@@ -17,6 +17,7 @@ process.env.ATLAS_DB_PATH = DB_PATH;
 process.env.ATLAS_UPLOAD_DIR = path.join(TEST_DIR, 'uploads');
 process.env.ATLAS_BACKUPS_DIR = path.join(TEST_DIR, 'backups');
 process.env.SESSION_SECRET = 'test-secret-not-for-production';
+process.env.ATLAS_ALLOW_HTTP = '1'; // secure-куки по умолчанию (roadmap #9) ломают set-cookie на обычном HTTP, каким тут гоняют тесты
 // без этого сервер после /backup/restore завершает process.exit() (как в реальной
 // жизни) — здесь мы это тестируем без убийства тестового процесса
 process.env.ATLAS_TEST_NO_EXIT = '1';

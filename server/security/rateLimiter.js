@@ -12,6 +12,9 @@
 
 const MAX_ATTEMPTS = 5;
 const LOCK_MS = 5 * 60 * 1000; // 5 минут
+// см. комментарий у registerFailureOne ниже (roadmap #34) — жёсткий предел
+// на общее число одновременно отслеживаемых IP/логинов в каждой из карт.
+const MAX_TRACKED_KEYS = 10000;
 
 // ATLAS_DISABLE_RATE_LIMIT — только для e2e (см. playwright.config.js):
 // сьют специально гоняет много "неверный пароль" тестов подряд с одного и
@@ -43,6 +46,14 @@ function checkOne(map, key){
 }
 function registerFailureOne(map, key){
   const rec = map.get(key) || { count: 0, lockedUntil: 0 };
+  // почасовая уборка (см. ниже) выметает только устаревшие записи — при
+  // массированной атаке с множества уникальных IP/логинов, каждый чуть
+  // ниже порога блокировки, карта может неограниченно расти МЕЖДУ
+  // уборками (roadmap #34). Жёсткий предел: новые ключи перестают
+  // добавляться при переполнении — уже отслеживаемые продолжают работать
+  // как раньше, это осознанный fail-open по доступности ради ограничения
+  // памяти, не ослабление защиты для уже подозрительных ключей.
+  if(!map.has(key) && map.size >= MAX_TRACKED_KEYS) return;
   rec.count += 1;
   if(rec.count >= MAX_ATTEMPTS){
     rec.lockedUntil = Date.now() + LOCK_MS;

@@ -109,8 +109,17 @@ function deleteUploadedFile(url){
   // удаляем физический файл только если он лежит в нашей папке uploads/
   if(!url || !url.startsWith('/uploads/')) return;
   const filePath = path.join(UPLOAD_DIR, path.basename(url));
-  fs.unlink(filePath, (err)=>{
-    if(err && err.code !== 'ENOENT') console.warn('Не удалось удалить файл', filePath, err.message);
+  // path.basename() уже отсекает большинство путей обхода (составной путь
+  // схлопывается в последний сегмент), но есть краевой случай: если url —
+  // ровно "/uploads/.." или "/uploads/.", basename() вернёт ".."/"." и
+  // filePath укажет на саму папку uploads или на её родителя, а не на файл
+  // внутри неё (roadmap #32). Явно проверяем, что итоговый путь реально
+  // находится внутри UPLOAD_DIR, прежде чем что-либо удалять.
+  const resolved = path.resolve(filePath);
+  const uploadDirResolved = path.resolve(UPLOAD_DIR) + path.sep;
+  if(!resolved.startsWith(uploadDirResolved)) return;
+  fs.unlink(resolved, (err)=>{
+    if(err && err.code !== 'ENOENT') console.warn('Не удалось удалить файл', resolved, err.message);
   });
 }
 

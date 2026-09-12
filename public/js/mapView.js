@@ -243,8 +243,20 @@ function renderTray(){
         const mapY = Math.round((y - rect.top - state.cam.y) / state.cam.scale);
         item.mapX = mapX; item.mapY = mapY;
         renderMarkers(); renderTray();
-        try{ await api(`/allods/${item.id}`, { method:'PATCH', body:{ mapX, mapY } }); toast('Сохранено'); }
-        catch(e){ toast('Ошибка сохранения: '+e.message); }
+        try{
+          const result = await api(`/allods/${item.id}`, { method:'PATCH', body:{ mapX, mapY, expectedRev: item.rev } });
+          item.rev = result.rev;
+          toast('Сохранено');
+        }catch(e){
+          if(e.status===409 && e.body && e.body.current){
+            const current = e.body.current;
+            item.mapX = current.mapX; item.mapY = current.mapY; item.rev = current.rev;
+            renderMarkers(); renderTray();
+            toast('Кто-то другой уже разместил этот остров — позиция обновлена');
+          }else{
+            toast('Ошибка сохранения: '+e.message);
+          }
+        }
       }
     });
     trayList.appendChild(el);
@@ -308,8 +320,25 @@ function makeMarkerDraggable(el, item){
       item.mapX = Math.round(parseFloat(el.style.left));
       item.mapY = Math.round(parseFloat(el.style.top));
       el.classList.add('was-dragged');
-      try{ await api(`/allods/${item.id}`, { method:'PATCH', body:{ mapX:item.mapX, mapY:item.mapY } }); toast('Сохранено'); }
-      catch(e){ toast('Ошибка сохранения: '+e.message); }
+      try{
+        const result = await api(`/allods/${item.id}`, { method:'PATCH', body:{ mapX:item.mapX, mapY:item.mapY, expectedRev: item.rev } });
+        item.rev = result.rev;
+        toast('Сохранено');
+      }catch(e){
+        // конфликт (кто-то другой сохранил этот же остров, пока мы тащили
+        // маркер) — здесь не до полноценного resolveConflict() с выбором
+        // позиции (как у текстовых полей в detailView.js): откатываем
+        // локальную позицию на актуальную с сервера и перерисовываем, чтобы
+        // не разойтись визуально с тем, что реально сохранено.
+        if(e.status===409 && e.body && e.body.current){
+          const current = e.body.current;
+          item.mapX = current.mapX; item.mapY = current.mapY; item.rev = current.rev;
+          renderMarkers();
+          toast('Кто-то другой уже переместил этот остров — позиция обновлена');
+        }else{
+          toast('Ошибка сохранения: '+e.message);
+        }
+      }
     }
   }
 
