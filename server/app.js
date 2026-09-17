@@ -22,6 +22,7 @@ const reportsRouter = require('./routes/reports');
 const draftsRouter = require('./routes/drafts');
 const { router: systemRouter } = require('./routes/system');
 const seoRouter = require('./routes/seo');
+const auditRouter = require('./routes/audit');
 const { UPLOAD_DIR } = require('./upload');
 
 require('./db'); // инициализирует (и при первом запуске засеивает) базу до старта сервера
@@ -154,6 +155,7 @@ function createApp(){
   app.use('/api', reportsRouter);
   app.use('/api', draftsRouter);
   app.use('/api/system', systemRouter);
+  app.use('/api/audit-log', auditRouter);
 
   app.use(seoRouter);
 

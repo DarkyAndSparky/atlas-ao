@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { requireAuth, requireProjectAccess } = require('./auth');
 const { fullAllod, applyAllodFieldsUpdate } = require('./allods');
+const { logAudit } = require('../audit');
 
 // Один черновик на остров (не на пользователя) — сознательное упрощение:
 // если два редактора одновременно решат поработать над черновиком одного
@@ -79,6 +80,7 @@ router.post('/allods/:id/draft/publish', requireAuth, (req, res)=>{
     : fullAllod(row);
 
   db.prepare('DELETE FROM allod_drafts WHERE allod_id=?').run(req.params.id);
+  logAudit(req, { action: 'allod.publish_draft', targetType: 'allod', targetId: row.id, targetLabel: row.name });
   res.json(published);
 });
 

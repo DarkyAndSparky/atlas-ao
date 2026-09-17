@@ -99,6 +99,30 @@ html[data-theme="light"] #topbar{
 html[data-theme="light"] #legalFooter{
   background:rgba(247,241,222,0.9);
 }
+/* Роадмап п.18: та же самая история, что и у #topbar/#legalFooter выше —
+   #tray (лоток неразмещённых островов) и .drag-ghost (подпись у курсора
+   при перетаскивании острова из лотка на карту — то самое "вытягивание
+   острова" из отчёта) тоже были захардкожены на тёмный фон, а текст
+   внутри уже переключался на тёмные буквы светлой темы (--gold-bright
+   в светлой теме — тёмно-коричневый, #9c6011) — нечитаемо на всё ещё
+   тёмном фоне. Тот же rgba (только светлый вместо тёмного), что и у
+   топбара/футера — консистентная прозрачность/оттенок по всему сайту. */
+html[data-theme="light"] #tray{
+  background:rgba(247,241,222,0.96);
+}
+html[data-theme="light"] .drag-ghost{
+  background:rgba(247,241,222,0.94);
+}
+/* .del-allod (кнопка "✕ Удалить остров" в правом верхнем углу карточки
+   острова) — та же история: rgba(11,14,26,...) хардкожен, текст уже
+   переключался на --parchment-dim светлой темы. Позиционирование
+   (жалоба "криво накладывается" в тёмной теме, отчёт п.16) отдельно от
+   цвета фона — не смог однозначно воспроизвести без скриншота, см.
+   пометку в роадмапе; этот фикс закрывает только цветовую часть жалобы
+   (светлая тема, п.21/18). */
+html[data-theme="light"] .del-allod{
+  background:rgba(247,241,222,0.7);
+}
 
 *{box-sizing:border-box;}
 /* глобальный фокус-стиль для кнопок/ссылок/выпадающих списков — раньше
@@ -265,6 +289,20 @@ body{
   font-family:var(--ui);font-size:13px;padding:10px 12px;border-radius:3px;outline:none;
 }
 .ef-input:focus{border-color:var(--gold);}
+/* Роадмап п.21: видимая обратная связь при пустом обязательном поле в
+   модалках (textPrompt/форма источника/«Сообщить об ошибке») — см.
+   flashFieldInvalid() в state.js. Работает и на .tp-input/.tp-textarea
+   (textPrompt из picker.js), у них нет отдельного класса — используют
+   тот же .ef-input. */
+.field-invalid{
+  border-color:var(--imperial) !important;
+  animation:field-shake 0.3s ease;
+}
+@keyframes field-shake{
+  0%,100%{ transform:translateX(0); }
+  20%,60%{ transform:translateX(-4px); }
+  40%,80%{ transform:translateX(4px); }
+}
 .modal-list{max-height:280px;overflow-y:auto;margin-top:8px;border-top:1px solid var(--line);}
 .picker-item{
   font-family:var(--ui);font-size:13px;color:var(--parchment);padding:9px 8px;cursor:pointer;
@@ -312,6 +350,21 @@ body{
 }
 #editorToggle:hover, .btn:hover{color:var(--gold-bright);border-color:var(--gold);}
 #editorToggle.on{background:var(--gold);color:var(--void-0);border-color:var(--gold);font-weight:600;}
+
+/* Роадмап п.22: бейдж числа открытых обращений читателей на кнопке
+   «⚙ Настройки» — см. refreshReportBadge() в authUI.js. data-report-count
+   хранит число текстом (не только для CSS content — атрибут же и есть
+   источник правды для title у самой кнопки), поэтому просто читаем его
+   через attr() в content, а не дублируем логику подсчёта в CSS. */
+#configBtn{position:relative;}
+#configBtn[data-report-count]::after{
+  content:attr(data-report-count);
+  position:absolute;top:-7px;right:-7px;
+  min-width:16px;height:16px;padding:0 4px;border-radius:8px;
+  background:var(--imperial);color:#fff;
+  font-family:var(--ui);font-size:10px;font-weight:700;line-height:16px;text-align:center;
+  box-shadow:0 0 0 2px var(--void-1);
+}
 
 #themeQuickToggle{
   font-size:15px;line-height:1;background:transparent;color:var(--parchment-dim);

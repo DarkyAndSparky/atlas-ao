@@ -131,7 +131,7 @@ function ensureSourceFormDom(){
     if(sourceFormResolve){ const r = sourceFormResolve; sourceFormResolve = null; r(result); }
   };
   const submit = ()=>{
-    if(!titleEl.value.trim()) return;
+    if(!titleEl.value.trim()){ flashFieldInvalid(titleEl, 'Название источника не может быть пустым.'); return; }
     close({ title: titleEl.value.trim(), url: urlEl.value.trim(), note: noteEl.value.trim() });
   };
   saveBtn.addEventListener('click', submit);

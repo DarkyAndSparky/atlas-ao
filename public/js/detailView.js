@@ -1080,7 +1080,7 @@ function ensureReportDom(){
   const close = (result)=>{ reportOverlay.classList.remove('show'); if(reportResolve){ const r=reportResolve; reportResolve=null; r(result); } };
   cancelBtn.addEventListener('click', ()=> close(null));
   saveBtn.addEventListener('click', ()=>{
-    if(!msgEl.value.trim()) return;
+    if(!msgEl.value.trim()){ flashFieldInvalid(msgEl, 'Опишите, что не так, прежде чем отправить.'); return; }
     close({ message: msgEl.value.trim(), contact: contactEl.value.trim() });
   });
   reportOverlay.addEventListener('mousedown', e=>{ if(e.target===reportOverlay) close(null); });

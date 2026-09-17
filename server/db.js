@@ -121,6 +121,41 @@ CREATE TABLE IF NOT EXISTS users (
   created_at INTEGER NOT NULL
 );
 
+-- Роадмап п.14: self-service запрос на сброс пароля с экрана входа.
+-- Сам сброс (генерация нового пароля) делает админ вручную через панель
+-- «Настройки» — почтового сервера у этого проекта нет и не планируется
+-- (см. обсуждение в роадмапе), поэтому email-флоу не подходит. Строка тут
+-- живёт только до того, как админ её разберёт (approve/dismiss) — история
+-- решённых запросов не нужна, поэтому resolved-записи сразу удаляются
+-- (см. routes/auth.js), а не копятся с status-колонкой.
+CREATE TABLE IF NOT EXISTS password_reset_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL,
+  requested_at INTEGER NOT NULL
+);
+
+-- Роадмап п.20 (аудит, BUG-006): audit-лог критических действий —
+-- создание/удаление пользователя, смена роли, блокировка, сброс пароля
+-- админом, публикация черновика. actor_username и target_label
+-- денормализованы (продублированы прямо в строке лога), а не только
+-- через actor_id/target_id — потому что смысл аудита в первую очередь
+-- в разборе ПОСЛЕ инцидента, когда сам пользователь или остров могли
+-- быть к этому моменту уже удалены; лог не должен становиться нечитаемым
+-- JOIN'ом в никуда. details — свободный JSON-контекст конкретного
+-- действия (например {"from":"editor","to":"admin"} для смены роли).
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at INTEGER NOT NULL,
+  actor_id INTEGER,
+  actor_username TEXT,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  target_label TEXT,
+  details TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+
 CREATE TABLE IF NOT EXISTS site_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   title TEXT NOT NULL DEFAULT 'Атлас Аллодов',

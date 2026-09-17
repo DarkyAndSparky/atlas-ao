@@ -197,7 +197,7 @@ function ensureTextPromptDom(){
   const activeEl = ()=> tpOverlay._opts.multiline ? textareaEl : inputEl;
   const submit = ()=>{
     const val = activeEl().value.trim();
-    if(tpOverlay._opts.required && !val) return;
+    if(tpOverlay._opts.required && !val){ flashFieldInvalid(activeEl(), tpOverlay._opts.requiredMsg || 'Это поле не может быть пустым.'); return; }
     close(val);
   };
   okBtn.addEventListener('click', submit);
@@ -211,7 +211,7 @@ function ensureTextPromptDom(){
 }
 function textPrompt(options){
   ensureTextPromptDom();
-  const opts = Object.assign({ title:'Введите значение', label:'', initialValue:'', placeholder:'', multiline:false, required:false }, options);
+  const opts = Object.assign({ title:'Введите значение', label:'', initialValue:'', placeholder:'', multiline:false, required:false, requiredMsg:'' }, options);
   tpOverlay._opts = opts;
   tpOverlay.querySelector('.modal-title').textContent = opts.title;
   const { inputEl, textareaEl } = tpOverlay._els;

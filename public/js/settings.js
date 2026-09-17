@@ -6,6 +6,23 @@
 let siteSettings = null;
 state.factionIcons = []; // [{id, faction, icon_url}] — управляемая библиотека, см. routes/factions.js
 
+// Человекочитаемые подписи для action-кодов из server/audit.js (роадмап
+// п.20) — держим маппинг тут же, рядом с единственным местом, где он
+// используется, а не в общем utils-файле ради одной карточки настроек.
+const AUDIT_ACTION_LABELS = {
+  'user.create': 'Создан пользователь',
+  'user.delete': 'Удалён пользователь',
+  'user.role_change': 'Изменена роль',
+  'user.disable': 'Заблокирован пользователь',
+  'user.enable': 'Разблокирован пользователь',
+  'user.force_password_reset': 'Принудительный сброс пароля',
+  'user.password_reset': 'Сброшен пароль (по запросу пользователя)',
+  'allod.publish_draft': 'Опубликован черновик острова',
+};
+function auditActionLabel(action){
+  return AUDIT_ACTION_LABELS[action] || action;
+}
+
 async function loadFactionIcons(){
   try{ state.factionIcons = await api('/factions'); }
   catch(e){ state.factionIcons = []; }
@@ -150,6 +167,8 @@ async function renderConfigPanel(){
   const s = siteSettings || {};
   const storedTheme = getStoredTheme(); // null | 'light' | 'dark'
   const users = await api('/auth/users').catch(()=>[]);
+  const resetRequests = await api('/auth/reset-requests').catch(()=>[]);
+  const auditLog = await api('/audit-log?limit=30').catch(()=>[]);
   const decorations = await api('/decorations').catch(()=>[]);
   const factionIconsList = await api('/factions').catch(()=>[]);
   const openReports = await api('/reports').catch(()=>[]);
@@ -242,6 +261,27 @@ async function renderConfigPanel(){
         </div>
       </div>
 
+      ${resetRequests.length ? `
+      <div class="config-card config-card-wide">
+        <h3>🔑 Запросы на сброс пароля (${resetRequests.length})</h3>
+        <p class="config-hint">Пользователь нажал «Забыли пароль?» на экране входа (роадмап п.14 —
+        почтового сброса на сервере нет, поэтому это ручное подтверждение). «Подтвердить»
+        сгенерирует новый временный пароль и покажет его один раз — скопируйте и передайте
+        человеку любым удобным способом (чат, звонок и т.п.); при следующем входе с этим паролем
+        его попросят сразу задать свой собственный. «Отклонить» просто уберёт запрос, ничего не
+        меняя в аккаунте (например, если запрос ошибочный или человек уже вспомнил пароль сам).</p>
+        <div class="users-list" id="resetRequestsList">
+          ${resetRequests.map(r=>`
+            <div class="user-row">
+              <span class="user-name">${escapeHtml(r.username)}</span>
+              <span class="user-date">${timeAgo(r.requestedAt)}</span>
+              <button class="btn reset-req-approve" data-req-id="${r.id}" data-username="${escapeHtml(r.username)}">Подтвердить</button>
+              <button class="btn reset-req-dismiss" data-req-id="${r.id}" data-username="${escapeHtml(r.username)}">Отклонить</button>
+            </div>`).join('')}
+        </div>
+      </div>
+      ` : ''}
+
       <div class="config-card config-card-wide">
         <h3>👤 Пользователи</h3>
         <p class="config-hint"><b>Администратор</b> — полный доступ: настройки сайта, бэкапы,
@@ -295,6 +335,23 @@ async function renderConfigPanel(){
           <button class="btn" id="cfgChangePassBtn">Сменить пароль</button>
         </div>
       </div>
+
+      ${auditLog.length ? `
+      <div class="config-card config-card-wide">
+        <h3>📋 Журнал действий</h3>
+        <p class="config-hint">Роадмап п.20 — только просмотр, последние ${auditLog.length}
+        записей. Фиксируются критические действия: создание/удаление пользователя, смена
+        роли, блокировка/разблокировка, сброс пароля (свой и админом), публикация черновика.</p>
+        <div class="users-list" id="auditLogList">
+          ${auditLog.map(a=>`
+            <div class="user-row">
+              <span class="user-date" title="${new Date(a.createdAt).toLocaleString('ru-RU')}">${timeAgo(a.createdAt)}</span>
+              <span class="user-name">${escapeHtml(auditActionLabel(a.action))}</span>
+              <span class="user-date">${escapeHtml(a.actorUsername || 'система')}${a.targetLabel ? ' → ' + escapeHtml(a.targetLabel) : ''}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+      ` : ''}
 
       <div class="config-card config-card-wide">
         <h3>🖼 Украшения карты</h3>
@@ -488,6 +545,49 @@ async function renderConfigPanel(){
         toast('Ошибка: '+e.message);
         sel.value = prevValue;
       }
+    });
+  });
+
+  document.querySelectorAll('.reset-req-approve').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.reqId;
+      const username = btn.dataset.username;
+      const ok = await confirmDialog({
+        title:'Подтвердить сброс пароля?',
+        message:`Для «${username}» будет создан новый временный пароль, старый перестанет
+          действовать сразу же (все текущие сессии этого аккаунта завершатся). Пароль будет
+          показан один раз — не забудьте его скопировать.`,
+        confirmLabel:'Подтвердить'
+      });
+      if(!ok) return;
+      try{
+        const r = await api('/auth/reset-requests/'+id+'/approve', { method:'POST' });
+        await textPrompt({
+          title: `Новый пароль для «${r.username}»`,
+          label: 'Скопируйте и передайте пользователю — этот пароль больше нигде не показывается',
+          initialValue: r.newPassword,
+        });
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
+    });
+  });
+
+  document.querySelectorAll('.reset-req-dismiss').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.reqId;
+      const username = btn.dataset.username;
+      const ok = await confirmDialog({
+        title:'Отклонить запрос?',
+        message:`Запрос на сброс пароля от «${username}» будет убран из списка. Пароль
+          пользователя не изменится.`,
+        confirmLabel:'Отклонить'
+      });
+      if(!ok) return;
+      try{
+        await api('/auth/reset-requests/'+id+'/dismiss', { method:'POST' });
+        toast('Запрос отклонён');
+        renderConfigPanel();
+      }catch(e){ toast('Ошибка: '+e.message); }
     });
   });
 
@@ -747,7 +847,7 @@ document.getElementById('configView').addEventListener('click', (ev)=>{
   const resolveBtn = ev.target.closest('.report-resolve-btn');
   if(resolveBtn){
     api('/reports/'+resolveBtn.dataset.id, { method:'PATCH', body:{ resolved:true } })
-      .then(()=>{ toast('Отмечено решённым'); renderConfigPanel(); })
+      .then(()=>{ toast('Отмечено решённым'); renderConfigPanel(); refreshReportBadge(); })
       .catch(e=> toast('Ошибка: '+e.message));
     return;
   }
@@ -757,7 +857,7 @@ document.getElementById('configView').addEventListener('click', (ev)=>{
       .then(ok=>{
         if(!ok) return;
         return api('/reports/'+deleteBtn.dataset.id, { method:'DELETE' })
-          .then(()=>{ toast('Удалено'); renderConfigPanel(); })
+          .then(()=>{ toast('Удалено'); renderConfigPanel(); refreshReportBadge(); })
           .catch(e=> toast('Ошибка: '+e.message));
       });
     return;

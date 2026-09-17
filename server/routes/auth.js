@@ -1,7 +1,8 @@
 const express = require('express');
 const db = require('../db');
-const { makeSalt, hashPassword, verifyPassword } = require('../security/passwords');
+const { makeSalt, hashPassword, verifyPassword, generateRandomPassword } = require('../security/passwords');
 const rateLimiter = require('../security/rateLimiter');
+const { logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -79,6 +80,26 @@ function parseAllowedProjects(raw){
 // NOCASE в запросе или в схеме таблицы. Логин у нас разрешает кириллицу
 // (см. USERNAME_RE), поэтому регистронезависимый поиск делаем в JS через
 // String.toLowerCase(), которая кириллицу обрабатывает правильно.
+// Убивает все активные сессии конкретного пользователя прямо сейчас — общий
+// хелпер для мест, где учётные данные/доступ пользователя меняются так, что
+// уже открытая вкладка не должна продолжать работать до следующего входа:
+// блокировка аккаунта (ниже) и админский сброс пароля через
+// /reset-requests/:id/approve. Сессии хранятся в той же БД (см.
+// sessionStore.js), а не в памяти процесса — один запрос, без похода в
+// express-session API и без лишнего чтения БД на каждый обычный запрос.
+function killSessionsForUser(id){
+  try{
+    const sessions = db.prepare('SELECT sid, sess FROM sessions').all();
+    const toKill = sessions.filter(s=>{
+      try{ return JSON.parse(s.sess).userId === id; }catch(e){ return false; }
+    }).map(s=>s.sid);
+    if(toKill.length){
+      const placeholders = toKill.map(()=>'?').join(',');
+      db.prepare(`DELETE FROM sessions WHERE sid IN (${placeholders})`).run(...toKill);
+    }
+  }catch(e){ /* не критично — в худшем случае сессия доживёт до истечения */ }
+}
+
 function findUserByUsername(username){
   const target = username.toLowerCase();
   return db.prepare('SELECT * FROM users').all().find(u => u.username.toLowerCase() === target);
@@ -144,6 +165,14 @@ router.post('/register', async (req, res, next)=>{
     const mustChangePassword = isBootstrap ? 0 : 1;
     const info = db.prepare('INSERT INTO users (username, salt, hash, role, must_change_password, created_at) VALUES (?,?,?,?,?,?)')
       .run(username, salt, hash, role, mustChangePassword, Date.now());
+
+    // Бутстрап (самый первый аккаунт) не логируем — это настройка сайта,
+    // ещё нет ни одного администратора, который мог бы быть "актёром"
+    // действия. Приглашение нового пользователя действующим админом —
+    // именно то критическое действие, ради которого нужен аудит.
+    if(!isBootstrap){
+      logAudit(req, { action: 'user.create', targetType: 'user', targetId: info.lastInsertRowid, targetLabel: username, details: { role } });
+    }
 
     if(isBootstrap){
       req.session.regenerate(err=>{
@@ -274,6 +303,7 @@ router.patch('/users/:id', requireAdmin, (req, res)=>{
       if(adminCount <= 1) return res.status(400).json({ error: 'Нельзя понизить последнего оставшегося администратора.' });
     }
     db.prepare('UPDATE users SET role=? WHERE id=?').run(role, id);
+    logAudit(req, { action: 'user.role_change', targetType: 'user', targetId: id, targetLabel: user.username, details: { from: user.role, to: role } });
     // если админ меняет роль самому себе — применяем сразу к текущей сессии,
     // иначе requireAdmin на следующем же запросе будет опираться на старую
     // роль из сессии, а не на то, что реально в базе
@@ -289,25 +319,12 @@ router.patch('/users/:id', requireAdmin, (req, res)=>{
       if(activeAdmins < 1) return res.status(400).json({ error: 'Нельзя заблокировать последнего активного администратора.' });
     }
     db.prepare('UPDATE users SET disabled=? WHERE id=?').run(disabled ? 1 : 0, id);
+    logAudit(req, { action: disabled ? 'user.disable' : 'user.enable', targetType: 'user', targetId: id, targetLabel: user.username });
     if(disabled){
       // Мягкая блокировка — но не настолько мягкая, чтобы уже открытая
       // вкладка заблокированного пользователя продолжала работать до его
-      // следующего логина. Сессии у нас хранятся в той же БД (см.
-      // sessionStore.js), а не в памяти процесса — можем убить все активные
-      // сессии этого пользователя прямо сейчас, одним запросом, без похода
-      // в express-session API и без добавления запроса к БД на каждый
-      // авторизованный запрос сайта (тот же компромисс, что и у role/
-      // allowedProjects — не перечитываем БД на каждый requireAuth).
-      try{
-        const sessions = db.prepare('SELECT sid, sess FROM sessions').all();
-        const toKill = sessions.filter(s=>{
-          try{ return JSON.parse(s.sess).userId === id; }catch(e){ return false; }
-        }).map(s=>s.sid);
-        if(toKill.length){
-          const placeholders = toKill.map(()=>'?').join(',');
-          db.prepare(`DELETE FROM sessions WHERE sid IN (${placeholders})`).run(...toKill);
-        }
-      }catch(e){ /* не критично — в худшем случае сессия доживёт до истечения */ }
+      // следующего логина.
+      killSessionsForUser(id);
     }
   }
 
@@ -327,6 +344,7 @@ router.patch('/users/:id', requireAdmin, (req, res)=>{
 
   if(req.body.forcePasswordReset === true){
     db.prepare('UPDATE users SET must_change_password=1 WHERE id=?').run(id);
+    logAudit(req, { action: 'user.force_password_reset', targetType: 'user', targetId: id, targetLabel: user.username });
   }
 
   res.json(publicUser(db.prepare('SELECT id, username, role, must_change_password, created_at, allowed_projects, disabled, last_login_at FROM users WHERE id=?').get(id)));
@@ -338,7 +356,7 @@ router.patch('/users/:id', requireAdmin, (req, res)=>{
 // пользователями/настройками/бэкапами (кроме npm run reset-password).
 router.delete('/users/:id', requireAdmin, (req, res)=>{
   const id = Number(req.params.id);
-  const user = db.prepare('SELECT id, role FROM users WHERE id=?').get(id);
+  const user = db.prepare('SELECT id, username, role FROM users WHERE id=?').get(id);
   if(!user) return res.status(404).json({ error: 'Пользователь не найден.' });
   if(countUsers() <= 1){
     return res.status(400).json({ error: 'Нельзя удалить последнего оставшегося пользователя.' });
@@ -350,12 +368,112 @@ router.delete('/users/:id', requireAdmin, (req, res)=>{
     }
   }
   db.prepare('DELETE FROM users WHERE id=?').run(id);
+  logAudit(req, { action: 'user.delete', targetType: 'user', targetId: id, targetLabel: user.username, details: { role: user.role } });
   // если удалили самого себя — сразу разлогиниваем эту сессию
   if(req.session.userId === id){
     req.session.destroy(()=> res.json({ ok: true, selfDeleted: true }));
   }else{
     res.json({ ok: true, selfDeleted: false });
   }
+});
+
+// ======================================================================
+// Роадмап п.14: self-service запрос на сброс пароля. Раньше кнопка
+// «Забыли пароль?» на экране входа просто показывала тост с инструкцией
+// выполнить `npm run reset-password` в консоли сервера — то есть без
+// доступа к самой машине с сервером восстановить доступ было никак.
+// Полноценный email-сброс требует настройки исходящей почты, чего у этого
+// проекта нет и не планируется (локальный/самостоятельно хостящийся
+// инструмент) — поэтому вместо этого: пользователь оставляет запрос,
+// админ видит его в «Настройки → Пользователи» и подтверждает вручную —
+// сервер сам генерирует новый временный пароль и показывает его админу
+// ОДИН раз (передать пользователю можно любым доступным каналом связи —
+// то же самое доверенное лицо, что и при обычном создании аккаунта
+// редактора). После входа с временным паролем, благодаря must_change_password=1,
+// пользователя сразу же попросят задать свой собственный — тот же
+// механизм, что и у обычных приглашённых аккаунтов.
+// ======================================================================
+
+// Публичный (без входа) запрос на сброс — специально не сообщает, найден
+// ли такой пользователь: ответ ВСЕГДА одинаковый, иначе кнопка становится
+// способом проверить, какие логины существуют на сервере (username
+// enumeration). Rate-limit по IP через тот же модуль, что и у логина, но
+// с отдельным неймспейсом ключей ('reset:' + логин) — иначе шквал запросов
+// сброса того же логина мог бы преждевременно заблокировать ЕГО ЖЕ
+// настоящий вход по паролю, который на самом деле работает.
+router.post('/reset-request', (req, res)=>{
+  const { username } = req.body || {};
+  const GENERIC_OK = { ok: true, message: 'Если такой аккаунт есть, администратор увидит запрос на сброс пароля в панели «Настройки».' };
+
+  if(typeof username !== 'string' || !username.trim()){
+    return res.json(GENERIC_OK); // намеренно 200 — см. комментарий выше про enumeration
+  }
+  const trimmed = username.trim();
+  const rateKey = 'reset:' + trimmed.toLowerCase();
+  const lock = rateLimiter.checkLocked(req, rateKey);
+  if(lock.locked){
+    // Тут ответ ТОЖЕ generic по содержанию (не подтверждаем/опровергаем
+    // существование аккаунта), только код другой — 429 не раскрывает,
+    // сработал он из-за реального пользователя или из-за спама по
+    // несуществующему логину, лимитер считает попытки одинаково для обоих.
+    return res.status(429).json({ error: `Слишком много запросов, попробуйте снова через ${lock.secondsLeft} сек.` });
+  }
+  rateLimiter.registerFailure(req, rateKey);
+
+  const user = findUserByUsername(trimmed);
+  if(user && !user.disabled){
+    const already = db.prepare('SELECT id FROM password_reset_requests WHERE username=? COLLATE NOCASE')
+      .get(user.username);
+    if(!already){
+      db.prepare('INSERT INTO password_reset_requests (username, requested_at) VALUES (?,?)')
+        .run(user.username, Date.now());
+    }
+  }
+  // Пользователя не существует / отключён / уже есть pending-запрос —
+  // во всех случаях молчим и отвечаем тем же самым GENERIC_OK.
+  res.json(GENERIC_OK);
+});
+
+// Список ожидающих запросов — «Настройки → Пользователи», только админ.
+router.get('/reset-requests', requireAdmin, (req, res)=>{
+  const rows = db.prepare('SELECT id, username, requested_at FROM password_reset_requests ORDER BY requested_at ASC').all();
+  res.json(rows.map(r => ({ id: r.id, username: r.username, requestedAt: r.requested_at })));
+});
+
+// Подтверждение сброса — генерирует новый временный пароль и возвращает
+// его админу ОДИН РАЗ в этом же ответе (нигде в открытом виде не хранится,
+// в БД уходит уже хэш через ту же hashPassword(), что и везде в этом файле).
+router.post('/reset-requests/:id/approve', requireAdmin, async (req, res)=>{
+  const id = Number(req.params.id);
+  const request = db.prepare('SELECT * FROM password_reset_requests WHERE id=?').get(id);
+  if(!request) return res.status(404).json({ error: 'Запрос не найден — возможно, уже обработан.' });
+
+  const user = findUserByUsername(request.username);
+  if(!user){
+    // аккаунт успели удалить, пока запрос висел — запрос больше не имеет смысла
+    db.prepare('DELETE FROM password_reset_requests WHERE id=?').run(id);
+    return res.status(404).json({ error: 'Пользователь, запросивший сброс, больше не существует.' });
+  }
+
+  const newPassword = generateRandomPassword();
+  const salt = makeSalt();
+  const hash = await hashPassword(newPassword, salt);
+  db.prepare('UPDATE users SET salt=?, hash=?, must_change_password=1 WHERE id=?').run(salt, hash, user.id);
+  logAudit(req, { action: 'user.password_reset', targetType: 'user', targetId: user.id, targetLabel: user.username });
+  killSessionsForUser(user.id); // пароль сменился — старые сессии этого аккаунта больше не valid
+  // на один логин может накопиться несколько дублирующих запросов — закрываем все разом
+  db.prepare('DELETE FROM password_reset_requests WHERE username=? COLLATE NOCASE').run(user.username);
+
+  res.json({ ok: true, username: user.username, newPassword });
+});
+
+// Отклонить запрос без смены пароля (спам/ошибочный запрос/уже решили лично) —
+// просто убирает его из списка, ничего в аккаунте не трогает.
+router.post('/reset-requests/:id/dismiss', requireAdmin, (req, res)=>{
+  const id = Number(req.params.id);
+  const info = db.prepare('DELETE FROM password_reset_requests WHERE id=?').run(id);
+  if(info.changes === 0) return res.status(404).json({ error: 'Запрос не найден — возможно, уже обработан.' });
+  res.json({ ok: true });
 });
 
 module.exports = { router, requireAuth, requireAdmin, requireProjectAccess, hasProjectAccess };

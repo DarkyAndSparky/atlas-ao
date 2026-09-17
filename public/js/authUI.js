@@ -26,6 +26,7 @@ async function updateAuthUI(){
     // внизу (см. main.js), а полная вкладка открывается по клику на версию —
     // тоже только администратору, эта проверка внутри самого обработчика клика.
     if(configBtn) configBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    if(isAdmin) refreshReportBadge();
     // «Последние изменения» — любому вошедшему (редактору тоже, не только
     // админу): это про координацию правок между собой, тот же уровень
     // доступа, что и у бэкенд-эндпоинта (requireAuth, не requireAdmin)
@@ -35,6 +36,7 @@ async function updateAuthUI(){
     btn.textContent = 'Войти';
     btn.classList.remove('logged-in');
     if(configBtn) configBtn.style.display = 'none';
+    if(configBtn) configBtn.removeAttribute('data-report-count');
     if(recentChangesBtn) recentChangesBtn.style.display = 'none';
     if(state.view === 'config' || state.view === 'about' || state.view === 'recentChanges') showMap();
     if(state.editorOn){
@@ -55,6 +57,35 @@ document.getElementById('configBtn').addEventListener('click', ()=>{
   if(authStatus.role !== 'admin'){ toast('Настройки доступны только администратору.'); return; }
   showConfig();
 });
+
+// Роадмап п.22: «пользователь написал обращение — не нашёл, где посмотреть
+// со стороны админа». Само обращение сохранялось и было видно в «Настройки»
+// и раньше — не хватало именно ПРИГЛАШЕНИЯ туда зайти: ничто на сайте не
+// намекало, что там вообще что-то накопилось, кроме памяти админа время от
+// времени заглядывать самому. Бейдж с числом открытых обращений на кнопке
+// «⚙ Настройки» — минимальный, ненавязчивый способ закрыть именно эту
+// дыру в обнаружении, не переделывая архитектуру (слияние с лентой
+// «последние изменения» и модерация правок гостей — гораздо больше по
+// объёму, см. отдельную пометку в роадмапе).
+async function refreshReportBadge(){
+  const configBtn = document.getElementById('configBtn');
+  if(!configBtn) return;
+  if(!(authStatus.loggedIn && authStatus.role === 'admin')){
+    configBtn.removeAttribute('data-report-count');
+    return;
+  }
+  try{
+    const openReports = await api('/reports'); // /reports без ?all=1 — только нерешённые, см. routes/reports.js
+    if(openReports.length > 0){
+      configBtn.setAttribute('data-report-count', String(openReports.length));
+      configBtn.title = `Есть непрочитанные обращения читателей: ${openReports.length}`;
+    }else{
+      configBtn.removeAttribute('data-report-count');
+      configBtn.title = '';
+    }
+  }catch(e){ /* не критично — бейдж просто не обновится в этот раз */ }
+}
+
 document.getElementById('recentChangesBtn').addEventListener('click', ()=>{
   if(!authStatus.loggedIn){ openAuth(); return; }
   showRecentChanges();
@@ -90,8 +121,26 @@ document.getElementById('authBtn').addEventListener('click', async ()=>{
   } else openAuth();
 });
 document.getElementById('amCancel').addEventListener('click', closeAuth);
-document.getElementById('amReset').addEventListener('click', ()=>{
-  toast('Сброс пароля выполняется на сервере: npm run reset-password (см. README).');
+document.getElementById('amReset').addEventListener('click', async ()=>{
+  // Роадмап п.14: раньше это была просто заглушка-тост с инструкцией
+  // выполнить npm run reset-password в консоли сервера — реального
+  // self-service сброса не было вообще. Теперь отправляем запрос на
+  // сервер; его увидит администратор в «Настройки → Пользователи» и
+  // сгенерирует новый временный пароль. Поле логина уже есть тут же в
+  // форме входа — отдельное окно не нужно, просто просим сначала его
+  // заполнить, если оно ещё пустое.
+  const username = amUser.value.trim();
+  if(!username){
+    toast('Сначала введите имя пользователя выше, затем нажмите «Забыли пароль?» ещё раз.');
+    amUser.focus();
+    return;
+  }
+  try{
+    const r = await api('/auth/reset-request', { method:'POST', body:{ username } });
+    toast(r.message);
+  }catch(e){
+    toast('Не удалось отправить запрос — попробуйте ещё раз чуть позже.');
+  }
 });
 async function submitAuth(){
   const username = amUser.value.trim();

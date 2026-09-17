@@ -29,6 +29,23 @@ const emptyHint = document.getElementById('emptyHint');
 /* ====================== SMALL SHARED HELPERS ====================== */
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Роадмап п.21: раньше обязательное поле в модалках (textPrompt, форма
+// источника, форма «Сообщить об ошибке») просто тихо блокировало
+// сохранение без единого слова пользователю — нажал «Сохранить»/
+// «Отправить», и ничего не произошло, будто кнопка сломана. Единая точка
+// видимой обратной связи: подсвечивает поле (рамка + короткая тряска,
+// см. .field-invalid в style.css), возвращает фокус и, если дали текст
+// сообщения, показывает его тостом — тем же способом, каким уже даёт
+// обратную связь wireEditableField() в detailView.js при required.
+function flashFieldInvalid(el, message){
+  el.classList.remove('field-invalid');
+  void el.offsetWidth; // форсируем reflow — иначе повторный клик подряд не переиграет анимацию (браузер схлопнет remove+add в один кадр)
+  el.classList.add('field-invalid');
+  el.focus();
+  if(message) toast(message);
+  el.addEventListener('animationend', ()=> el.classList.remove('field-invalid'), { once:true });
+}
+
 // Относительное время ("3 дня назад") для бейджа "Обновлено N назад" на
 // странице острова и для истории правок — ms — timestamp в миллисекундах.
 function timeAgo(ms){

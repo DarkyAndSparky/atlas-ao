@@ -5,12 +5,31 @@ const multer = require('multer');
 const AdmZip = require('adm-zip');
 const { requireAdmin } = require('./auth');
 const { UPLOAD_DIR } = require('../upload');
+const { scheduleRestart } = require('../restart');
 
 const DB_PATH = process.env.ATLAS_DB_PATH || path.join(__dirname, '..', 'atlas.db');
 const BACKUPS_DIR = process.env.ATLAS_BACKUPS_DIR || path.join(__dirname, '..', '..', 'backups');
 if(!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
 const router = express.Router();
+
+// Текст пользователю после восстановления зависит от того, что реально
+// произойдёт с процессом (см. server/restart.js) — не обещаем "перезапускаю
+// сам", если по факту respawn не удался и нужен ручной перезапуск.
+function restartMessage(mode, prefix){
+  switch(mode){
+    case 'respawn':
+      return `${prefix} Сервер перезапускается автоматически — обновите страницу через несколько секунд.`;
+    case 'docker':
+      return `${prefix} Контейнер перезапустится сам (restart-policy Docker) — обновите страницу через несколько секунд.`;
+    // 'test' (ATLAS_TEST_NO_EXIT=1) и любой нераспознанный mode намеренно
+    // проваливаются в default — тот же текст, что реальный пользователь
+    // увидел бы, если бы auto-respawn не сработал. backup-restore.test.js /
+    // backup-full.test.js проверяют именно эту формулировку (/перезапустите/i).
+    default:
+      return `${prefix} Перезапустите сервер вручную (Ctrl+C, затем снова node server.js / start.sh / start.bat).`;
+  }
+}
 
 // скачать текущий файл базы целиком — требует входа, т.к. внутри лежит и хэш пароля
 router.get('/download', requireAdmin, (req, res)=>{
@@ -26,10 +45,11 @@ router.get('/download', requireAdmin, (req, res)=>{
 });
 
 // загрузить .db файл и заменить текущую базу им
-// ВАЖНО: после успешной загрузки сервер завершает процесс — его нужно перезапустить
-// вручную (start.sh / start.bat), чтобы открыть базу заново. Это осознанное
-// упрощение для локального однопользовательского инструмента: избегаем гонок
-// с уже открытым соединением SQLite.
+// После успешной загрузки процесс перезапускается сам (см. server/restart.js) —
+// закрываем старое соединение с SQLite и переоткрываем его на новом файле с
+// нуля, избегая гонок с уже открытым соединением. Раньше (до роадмап п.12)
+// это было "процесс завершается, перезапустите вручную" — вне Docker сайт
+// реально зависал до ручного вмешательства.
 const memStorage = multer.memoryStorage();
 const uploadDb = multer({ storage: memStorage, limits: { fileSize: 200*1024*1024 } });
 
@@ -55,15 +75,11 @@ router.post('/restore', requireAdmin, uploadDb.single('database'), (req, res)=>{
     try{ fs.unlinkSync(DB_PATH + ext); }catch(e){ /* файла и не было — это нормально */ }
   }
   fs.writeFileSync(DB_PATH, req.file.buffer);
-  res.json({ ok: true, message: 'База восстановлена. Перезапустите сервер (Ctrl+C, затем снова node server.js / start.sh / start.bat).' });
-  // сервер намеренно завершает процесс, чтобы гарантированно открыть восстановленный
-  // файл с нуля (никаких гонок со старым соединением/кэшами) — в Docker-режиме
-  // restart:unless-stopped поднимет контейнер обратно сам, вне Docker это описано
-  // в ответе выше как "перезапустите вручную". ATLAS_TEST_NO_EXIT — только для
-  // тестов, чтобы проверить сам факт записи файла, не убивая тестовый процесс.
-  if(process.env.ATLAS_TEST_NO_EXIT !== '1'){
-    setTimeout(()=> process.exit(0), 300);
-  }
+  const restart = scheduleRestart();
+  res.json({ ok: true, message: restartMessage(restart.mode, 'База восстановлена.') });
+  // process.exit(0) теперь внутри scheduleRestart() — см. server/restart.js
+  // (роадмап п.12: раньше сайт зависал до ручного перезапуска вне Docker,
+  // теперь процесс сам поднимает свою новую копию перед выходом).
 });
 
 // Полный архив сайта: БД + все загруженные файлы одним .zip — в отличие от
@@ -152,11 +168,9 @@ router.post('/restore-full', requireAdmin, uploadZip.single('archive'), (req, re
   res.json({
     ok: true,
     uploadsRestored: restoredCount,
-    message: 'Сайт восстановлен из полного архива (база + файлы). Перезапустите сервер (Ctrl+C, затем снова node server.js / start.sh / start.bat).',
+    message: restartMessage(scheduleRestart().mode, 'Сайт восстановлен из полного архива (база + файлы).'),
   });
-  if(process.env.ATLAS_TEST_NO_EXIT !== '1'){
-    setTimeout(()=> process.exit(0), 300);
-  }
+  // process.exit(0) теперь внутри scheduleRestart() — см. server/restart.js
 });
 
 module.exports = router;
